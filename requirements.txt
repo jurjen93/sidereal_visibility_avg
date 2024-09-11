@@ -1,0 +1,3 @@
+python-casacore
+astropy
+scipy
