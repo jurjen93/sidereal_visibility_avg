@@ -1,2 +1,3 @@
-# sidereal_visibility-avg
-Sidereal visibility averaging
+# Sidereal visibility averaging
+
+To be added..
