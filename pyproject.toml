@@ -8,4 +8,4 @@ version = "0.1.0"
 dependencies = []
 
 [project.scripts]
-your-command = "sidereal_visibility_avg.main:main"
+sidereal_visibility_avg = "sidereal_visibility_avg.main:main"
