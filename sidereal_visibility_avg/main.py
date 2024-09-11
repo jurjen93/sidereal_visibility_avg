@@ -30,8 +30,8 @@ from .utils.clean import clean_binary_files, clean_mapping_files
 from .utils.files import check_folder_exists
 from .utils.smearing import time_resolution
 from .utils.plot import make_baseline_uvw_plots
-from sidereal_visibility_avg.template_ms import Template
-from sidereal_visibility_avg.stack_ms import Stack
+from .template_ms import Template
+from .stack_ms import Stack
 
 
 def parse_args():

@@ -1,6 +1,6 @@
 from casacore.tables import table
 import numpy as np
-from sidereal_visibility_avg.utils.lst import mjd_seconds_to_lst_seconds
+from .lst import mjd_seconds_to_lst_seconds
 from sys import exit
 
 
