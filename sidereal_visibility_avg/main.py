@@ -1618,4 +1618,4 @@ def main():
 
 
 if __name__ == '__main__':
-    ms_merger()
+    main()
