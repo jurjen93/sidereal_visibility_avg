@@ -1,10 +1,9 @@
 from sys import exit
 import matplotlib.pyplot as plt
-from ms_info import get_station_id
 from casacore.tables import table
 from os import system as run_command
 import numpy as np
-from sidereal_visibility_avg.utils.ms_info import make_ant_pairs
+from sidereal_visibility_avg.utils.ms_info import make_ant_pairs, get_station_id
 
 
 def plot_baseline_track(t_final_name: str = None, t_input_names: list = None, baseline='0-1', UV=True, saveas=None):
