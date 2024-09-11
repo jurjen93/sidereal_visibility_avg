@@ -63,7 +63,7 @@ def main():
     # Make template
     args = parse_args()
 
-    one_lst_day_sec = 86164.1
+    # one_lst_day_sec = 86164.1
 
     # Verify if output exists
     if check_folder_exists(args.msout):
