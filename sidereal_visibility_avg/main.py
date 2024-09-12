@@ -1,26 +1,6 @@
 """
 LOFAR SIDEREAL VISIBILITY AVERAGER
-This script can be used to average visibilities over sidereal time, when using multiple observations of the same FoV.
-
-Example: python ms_merger.py --msout <MS_NAME> *.ms
-The wildcard is in this example combining a collection of measurement sets
-
-Strategy:
-    1) Make a template using the 'default_ms' option from casacore.tables (Template class).
-       The template inclues all baselines, frequency, and smallest time spacing from all input MS.
-       Time is converted to Local Sidereal Time (LST).
-
-    2) Map baselines from input MS to template MS.
-        This step makes *baseline_mapping folders with the baseline mappings in json files.
-
-    3) Interpolate new UV data with nearest neighbours.
-
-    4) Make exact mapping between input MS and template MS, using only UV data points.
-
-    5) Average measurement sets in the template (Stack class).
-        The averaging is done with a weighted average, using the FLAG and WEIGHT_SPECTRUM columns.
 """
-
 
 import sys
 from argparse import ArgumentParser

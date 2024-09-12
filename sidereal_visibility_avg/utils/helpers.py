@@ -9,7 +9,7 @@ def print_progress_bar(index, total, bar_length=50):
     """
     Prints a progress bar to the console.
 
-    :param::param:
+    :param:
         - index: the current index (0-based) in the iteration.
         - total: the total number of indices.
         - bar_length: the character length of the progress bar (default 50).
@@ -193,6 +193,7 @@ def add_axis(arr, ax_size):
     :return:
         - output with new axis dimension with a particular size
     """
+
     or_shape = arr.shape
     new_shape = list(or_shape) + [ax_size]
     return np.repeat(arr, ax_size).reshape(new_shape)
@@ -210,7 +211,8 @@ def resample_array(data, factor):
     :return:
         - The resampled data array.
     """
-    # Original number of points
+
+    # Number of points in input
     n_points = len(data)
 
     # Number of points in the resampled array
@@ -229,7 +231,7 @@ def resample_array(data, factor):
 def sort_list(zipped_list):
     """
     Sorts a list of lists (or tuples) based on the first element of each inner list or tuple,
-    which is necessary for a zipped list with station names and positions
+    which is necessary for a zipped list with station names and positions.
 
     :param:
         - zipped_list (list of lists or tuples): The list to be sorted.
@@ -241,7 +243,15 @@ def sort_list(zipped_list):
 
 
 def squeeze_to_intlist(arr):
-    """Squeeze array and make list with integers"""
+    """
+    Squeeze array and make list with integers
+
+    :param:
+        - arr: numpy array
+
+    :return:
+        squeezed integers
+    """
 
     squeezed = np.squeeze(arr).astype(int)
     if squeezed.ndim == 0:

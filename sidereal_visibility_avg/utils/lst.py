@@ -5,11 +5,11 @@ import astropy.units as u
 
 def mjd_seconds_to_lst_seconds(mjd_seconds, longitude_deg=6.869837):
     """
-    Convert time in modified Julian Date time to LST
+    Convert time in modified Julian Date time to LST.
 
     :param:
         - mjd_seconds: modified Julian date time in seconds
-        - longitde_deg: longitude telescope in degrees (6.869837 for LOFAR )
+        - longitde_deg: longitude telescope in degrees (6.869837 for LOFAR core)
 
     :return:
         time in LST

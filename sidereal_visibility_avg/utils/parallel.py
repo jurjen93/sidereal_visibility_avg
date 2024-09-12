@@ -35,6 +35,7 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=T
             pass  # If memory error, fall back to using memmap
 
     n = len(array1)
+
     # Determine the output storage type based on input type
     if isinstance(array1, np.memmap) or isinstance(array2, np.memmap):
         # Create a temporary file to store the result as a memmap
