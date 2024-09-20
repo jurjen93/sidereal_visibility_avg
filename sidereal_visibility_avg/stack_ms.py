@@ -1,6 +1,6 @@
 from casacore.tables import table, taql
 import numpy as np
-import os
+from os import path
 import sys
 from concurrent.futures import ThreadPoolExecutor
 import psutil
@@ -17,7 +17,7 @@ class Stack:
     Stack measurement sets in template empty.ms
     """
     def __init__(self, msin: list = None, outname: str = 'empty.ms', chunkmem: float = 1.):
-        if not os.path.exists(outname):
+        if not path.exists(outname):
             sys.exit(f"ERROR: Template {outname} has not been created or is deleted")
         print("\n\n==== Start stacking ====\n")
         self.template = table(outname, readonly=False, ack=False)
@@ -64,7 +64,7 @@ class Stack:
         self.T.putcol('UVW', uvw)
 
 
-    def stack_all(self, column: str = 'DATA'):
+    def stack_all(self, column: str = 'DATA', avg_uvw: bool = False):
         """
         Stack all MS
 
@@ -77,7 +77,7 @@ class Stack:
             Read mapping with multi-threads
             """
             # Get the list of JSON files
-            json_files = glob(os.path.join(mapping_folder, "*.json"))
+            json_files = glob(path.join(mapping_folder, "*.json"))
 
             # Load JSON files in parallel
             total_map = {}
@@ -95,88 +95,96 @@ class Stack:
             return indices, ref_indices
 
         if column == 'DATA':
-            columns = ['UVW', column, 'WEIGHT_SPECTRUM']
+            if avg_uvw:
+                columns = ['UVW', column, 'WEIGHT_SPECTRUM']
+            else:
+                columns = [column, 'WEIGHT_SPECTRUM']
         else:
             sys.exit("ERROR: Only column 'DATA' allowed (for now)")
 
         # Get template data
-        self.T = table(os.path.abspath(self.outname), readonly=False, ack=False)
+        with table(path.abspath(self.outname), readonly=False, ack=False) as self.T:
 
-        # Loop over columns
-        for col in columns:
+            # Loop over columns
+            for col in columns:
 
-            if col == 'UVW':
-                new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len)
-            else:
-                new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len)
-
-            # Loop over measurement sets
-            for ms in self.mslist:
-
-                print(f'\nStacking {col}: {ms}')
-
-                # Open MS table
-                if col == 'DATA':
-                    t = taql(f"SELECT {col} * WEIGHT_SPECTRUM AS DATA_WEIGHTED FROM {os.path.abspath(ms)} ORDER BY TIME")
-                elif col == 'UVW':
-                    t = taql(f"SELECT {col},WEIGHT_SPECTRUM FROM {os.path.abspath(ms)} ORDER BY TIME")
+                if col == 'UVW':
+                    new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len)
                 else:
-                    t = taql(f"SELECT {col} FROM {os.path.abspath(ms)} ORDER BY TIME")
+                    new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len)
 
-                # Get freqs offset
-                if col != 'UVW':
-                    f = table(ms+'::SPECTRAL_WINDOW', ack=False)
-                    freqs = f.getcol("CHAN_FREQ")[0]
-                    freq_idxs = find_closest_index_list(freqs, self.ref_freqs)
-                    f.close()
+                # Loop over measurement sets
+                for ms in self.mslist:
 
-                # Make antenna mapping in parallel
-                mapping_folder = ms + '_baseline_mapping'
+                    print(f'\nStacking {col}: {ms}')
 
-                print('Read mapping')
-                indices, ref_indices = read_mapping(mapping_folder)
-
-                # Chunked stacking!
-                chunks = len(indices)//self.chunk_size + 1
-                print(f'Stacking in {chunks} chunks')
-                for chunk_idx in range(chunks):
-                    print_progress_bar(chunk_idx, chunks+1)
-                    data = t.getcol(col+"_WEIGHTED" if col == 'DATA' else col,
-                                            startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
-
-                    row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
-                    row_idxs = [int(i - chunk_idx * self.chunk_size) for i in
-                                indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
-
-
-                    if col == 'UVW':
-                        new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :],
-                                                                         chunk_size=self.chunk_size//self.num_cpus)
-
-                        uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape),
-                                                                         chunk_size=self.chunk_size//self.num_cpus)
-                        uvw_weights.flush()
+                    # Open MS table
+                    if col == 'DATA':
+                        t = taql(f"SELECT {col} * WEIGHT_SPECTRUM AS DATA_WEIGHTED FROM {path.abspath(ms)} ORDER BY TIME")
+                    elif col == 'UVW':
+                        t = taql(f"SELECT {col},WEIGHT_SPECTRUM FROM {path.abspath(ms)} ORDER BY TIME")
                     else:
-                        new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :],
-                                                                         chunk_size=self.chunk_size//self.num_cpus)
+                        t = taql(f"SELECT {col} FROM {path.abspath(ms)} ORDER BY TIME")
 
-                    new_data.flush()
+                    # Get freqs offset
+                    if col != 'UVW':
+                        f = table(ms+'::SPECTRAL_WINDOW', ack=False)
+                        freqs = f.getcol("CHAN_FREQ")[0]
+                        freq_idxs = find_closest_index_list(freqs, self.ref_freqs)
+                        f.close()
 
-                print_progress_bar(chunk_idx, chunks)
-                t.close()
+                    # Make antenna mapping in parallel
+                    mapping_folder = ms + '_baseline_mapping'
 
-            print(f'Put column {col}')
-            if col == 'UVW':
-                uvw_weights[uvw_weights == 0] = 1
-                new_data /= uvw_weights
-                new_data[new_data != new_data] = 0.
+                    print('Read mapping')
+                    indices, ref_indices = read_mapping(mapping_folder)
 
-            for chunk_idx in range(self.T.nrows()//self.chunk_size+1):
-                self.T.putcol(col, new_data[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)],
-                              startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                    # Chunked stacking!
+                    chunks = len(indices)//self.chunk_size + 1
+                    print(f'Stacking in {chunks} chunks')
+                    for chunk_idx in range(chunks):
+                        print_progress_bar(chunk_idx, chunks+1)
+                        data = t.getcol(col+"_WEIGHTED" if col == 'DATA' else col,
+                                                startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
 
-        self.T.close()
+                        row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
+                        row_idxs = [int(i - chunk_idx * self.chunk_size) for i in
+                                    indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
+
+                        if col == 'UVW':
+                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :],
+                                                                             chunk_size=self.chunk_size//self.num_cpus)
+
+                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape),
+                                                                             chunk_size=self.chunk_size//self.num_cpus)
+                            uvw_weights.flush()
+                        else:
+                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :],
+                                                                             chunk_size=self.chunk_size//self.num_cpus)
+
+                        new_data.flush()
+
+                    print_progress_bar(chunk_idx, chunks)
+                    t.close()
+
+                print(f'Put column {col}')
+                if col == 'UVW':
+                    uvw_weights[uvw_weights == 0] = 1
+                    new_data /= uvw_weights
+                    new_data[new_data != new_data] = 0.
+
+                for chunk_idx in range(self.T.nrows()//self.chunk_size+1):
+                    # print(new_data[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)])
+                    # print(chunk_idx, self.chunk_size, self.T.nrows())
+                    if self.T.nrows() < self.chunk_size:
+                        print(chunk_idx, self.chunk_size, self.T.nrows())
+                        self.T.putcol(col, new_data[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)])
+                    else:
+                        self.T.putcol(col, new_data[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)],
+                                      startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+
+        # print(taql("SELECT DATA FROM empty.ms | echo"))
         # if self.flag:
         #     # ADD FLAG
         print(f'Put column FLAG')

@@ -1,6 +1,7 @@
 from casacore.tables import table, default_ms, taql
 import numpy as np
-import os
+from os import path, makedirs, cpu_count
+from os import system as run_command
 from shutil import rmtree
 from pprint import pprint
 import json
@@ -22,6 +23,24 @@ class Template:
     def __init__(self, msin: list = None, outname: str = 'empty.ms'):
         self.mslist = msin
         self.outname = outname
+
+        # How much time to new day
+        self._time_lst_offset = None
+
+    @property
+    def time_lst_offset(self):
+        """Get time LST offset to average to same day"""
+
+        if self._time_lst_offset is None:
+            times = []
+            for ms in self.mslist:
+                with table(f"{ms}::OBSERVATION") as t:
+                    tr = t.getcol("TIME_RANGE")[0][0]
+                    lst_tr = mjd_seconds_to_lst_seconds(t.getcol("TIME_RANGE")[0][0])
+                    lst_offset = tr - lst_tr
+                    times.append(lst_offset)
+            self._time_lst_offset = np.median(times)
+        return self._time_lst_offset
 
     def add_spectral_window(self):
         """
@@ -149,6 +168,262 @@ class Template:
         tnew_station.flush(True)
         tnew_station.close()
 
+    def make_mapping_lst(self):
+        """
+        Make mapping json files essential for efficient stacking
+        These map LST times from input MS to template MS.
+        Note that these are not accurate mappings but good first estimate, which are later corrected with final mappings.
+        """
+
+        T = taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(self.outname)} ORDER BY TIME")
+
+        ref_time = T.getcol("TIME")
+        time_len = ref_time.__len__()
+        ref_uniq_time = np.unique(ref_time)
+        ref_antennas = np.sort(np.c_[T.getcol("ANTENNA1"), T.getcol("ANTENNA2")])
+
+        T.close()
+
+        def process_antpair(antpair):
+            """
+            Making json files with antenna pair mappings.
+            Mapping INPUT MS idx --> OUTPUT MS idx
+
+            :param:
+                - antpair: antenna pair
+
+            """
+
+            # Get idx
+            pair_idx = squeeze_to_intlist(np.argwhere(np.all(antennas == antpair, axis=1)))
+            ref_pair_idx = squeeze_to_intlist(np.argwhere(np.all(ref_antennas == antpair, axis=1))[time_idxs])
+
+            # Make mapping dict
+            mapping = {int(pair_idx[i]): int(ref_pair_idx[i]) for i in range(min(pair_idx.__len__(), ref_pair_idx.__len__()))}
+
+            # Ensure the mapping folder exists
+            makedirs(mapping_folder, exist_ok=True)
+            # Define file path
+            file_path = path.join(mapping_folder, '-'.join(antpair.astype(str)) + '.json')
+
+            # Write to file
+            with open(file_path, 'w') as f:
+                json.dump(mapping, f)
+
+        def run_parallel_mapping(uniq_ant_pairs):
+            """
+            Parallel processing of mapping with unique antenna pairs
+
+            :param:
+                - uniq_ant_pairs: unique antenna pairs to loop over in parallel
+            """
+
+            # Number of threads in the pool (adjust based on available resources)
+            with ThreadPoolExecutor(max_workers=max(cpu_count()-3, 1)) as executor:
+                # Submit tasks to the executor
+                futures = [executor.submit(process_antpair, antpair) for antpair in uniq_ant_pairs]
+
+                # Optionally, gather results or handle exceptions
+                for future in futures:
+                    future.result()  # This will raise exceptions if any occurred during the execution
+
+        ref_stats, ref_ids = get_station_id(self.outname)
+
+        # Make mapping
+        for ms in self.mslist:
+
+            print(f'\nMapping: {ms}')
+
+            # Open MS table
+            t = taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(ms)} ORDER BY TIME")
+
+            # Make antenna mapping in parallel
+            mapping_folder = ms + '_baseline_mapping'
+
+            # Verify if folder exists
+            if not check_folder_exists(mapping_folder):
+                makedirs(mapping_folder, exist_ok=False)
+
+                # Get MS info
+                new_stats, new_ids = get_station_id(ms)
+                id_map = dict(zip(new_ids, [ref_stats.index(a) for a in new_stats]))
+
+                # Time in LST
+                time = mjd_seconds_to_lst_seconds(t.getcol("TIME")) + self.time_lst_offset
+                uniq_time = np.unique(time)
+                time_idxs = find_closest_index_list(uniq_time, ref_uniq_time)
+
+                # Map antenna pairs to same as ref (template)
+                antennas = np.sort(np.c_[map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)])
+
+                # Unique antenna pairs
+                uniq_ant_pairs = np.unique(np.sort(antennas), axis=0)
+
+                run_parallel_mapping(uniq_ant_pairs)
+            else:
+                print(f'{mapping_folder} already exists')
+
+    def calculate_uvw(self):
+        """
+        Calculate UVW with DP3
+        """
+
+        # Make baseline/time mapping
+        self.make_mapping_lst()
+
+        # Use DP3 to upsample and downsample, recalculating the UVW coordinates
+        run_command(f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up,avg] "
+                    f"up.type=upsample up.timestep=2 up.updateuvw=True avg.timestep=2 avg.type=averager "
+                    f"&& rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}")
+
+        # Update baseline mapping TODO: remove LST mapping
+        self.make_mapping_uvw()
+
+    def interpolate_uvw(self):
+        """
+        Fill UVW data points
+        """
+
+        # Make baseline/time mapping
+        self.make_mapping_lst()
+
+        def process_baselines(baseline_indices, baselines, mslist):
+            """Process baselines parallel executor"""
+            results = []
+            for b_idx in baseline_indices:
+                baseline = baselines[b_idx]
+                c = 0
+                # uvw = np.memmap('total_uvw.dat', dtype=np.float32, shape=(1, 3), mode='w+')
+                uvw = np.zeros((0, 3))
+                # time = np.memmap('total_time.dat', dtype=np.float64, shape=1, mode='w+')
+                time = np.array([])
+                row_idxs = []
+                for ms_idx, ms in enumerate(sorted(mslist)):
+                    mappingfolder = ms + '_baseline_mapping'
+                    try:
+                        mapjson = json.load(open(mappingfolder + '/' + '-'.join([str(a) for a in baseline]) + '.json'))
+                    except FileNotFoundError:
+                        c += 1
+                        continue
+
+                    row_idxs += list(mapjson.values())
+                    uvw = np.append(np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
+                        [int(i) for i in list(mapjson.keys())]], uvw, axis=0)
+
+                    time = np.append(np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
+
+                results.append((list(np.unique(row_idxs)), uvw, b_idx, time))
+            return results
+
+        # Get baselines
+        ants = table(self.outname + "::ANTENNA", ack=False)
+        baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
+        ants.close()
+
+        T = table(self.outname, readonly=False, ack=False)
+        UVW = np.memmap('UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
+        TIME = np.memmap('TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
+        TIME[:] = T.getcol("TIME")
+
+        for ms_idx, ms in enumerate(sorted(self.mslist)):
+            with table(ms, ack=False) as f:
+                uvw = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                time = np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
+
+                uvw[:] = f.getcol("UVW")
+                time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
+
+        # Determine number of workers
+        num_workers = max(cpu_count()-5, 1)  # I/O-bound heuristic
+
+        print(f"Using {num_workers} workers for making UVW column and accurate baseline mapping."
+              f"\nThis is an expensive operation. So, be patient..")
+
+        batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
+
+        print("Multithreading...")
+
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            future_to_baseline = {
+                executor.submit(process_baselines, range(i, min(i + batch_size, len(baselines))), baselines,
+                                self.mslist): i
+                for i in range(0, len(baselines), batch_size)
+            }
+
+            for future in as_completed(future_to_baseline):
+                batch_start_idx = future_to_baseline[future]
+                try:
+                    results = future.result()
+                    for row_idxs, uvws, b_idx, time in results:
+                        UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
+                except Exception as exc:
+                    print(f'Batch starting at index {batch_start_idx} generated an exception: {exc}')
+
+        UVW.flush()
+        T.putcol("UVW", UVW)
+        T.close()
+
+        # Make final mapping
+        self.make_mapping_uvw()
+
+    def make_mapping_uvw(self):
+        """
+        Make mapping json files essential for efficient stacking based on UVW points
+        """
+
+        def process_baseline(baseline, mslist, UVW):
+            """Parallel processing baseline"""
+            try:
+                folder = '/'.join(mslist[0].split('/')[0:-1])
+                if not folder:
+                    folder = '.'
+                mapping_folder_baseline = sorted(
+                    glob(folder + '/*_mapping/' + '-'.join([str(a) for a in baseline]) + '.json'))
+                idxs_ref = np.unique(
+                    [idx for mapp in mapping_folder_baseline for idx in json.load(open(mapp)).values()])
+                uvw_ref = UVW[list(idxs_ref)]
+                for mapp in mapping_folder_baseline:
+                    idxs = [int(i) for i in json.load(open(mapp)).keys()]
+                    ms = glob('/'.join(mapp.split('/')[0:-1]).replace("_baseline_mapping", ""))[0]
+                    uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
+                    idxs_new = [int(i) for i in np.array(idxs_ref)[
+                        list(find_closest_index_multi_array(uvw_in[:, 0:2], uvw_ref[:, 0:2]))]]
+                    with open(mapp, 'w+') as f:
+                        json.dump(dict(zip(idxs, idxs_new)), f)
+            except Exception as exc:
+                print(f'Baseline {baseline} generated an exception: {exc}')
+
+        # Get baselines
+        ants = table(self.outname + "::ANTENNA", ack=False)
+        baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
+        ants.close()
+
+        if not path.exists('UVW.tmp.dat'):
+            with table(self.outname, readonly=False, ack=False) as T:
+                np.memmap('UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
+                np.memmap('TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
+
+                for ms_idx, ms in enumerate(sorted(self.mslist)):
+                    with table(ms, ack=False) as f:
+                        np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                        np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
+
+        UVW = np.memmap('UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
+
+        num_workers = min(cpu_count()-5, len(baselines))
+
+        print('\nMake new mapping based on UVW points')
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            future_to_baseline = {executor.submit(process_baseline, baseline, self.mslist, UVW): baseline for baseline in
+                                  baselines}
+            for n, future in enumerate(as_completed(future_to_baseline)):
+                baseline = future_to_baseline[future]
+                try:
+                    future.result()
+                except Exception as exc:
+                    print(f'Baseline {baseline} generated an exception: {exc}')
+                print_progress_bar(n + 1, len(baselines))
+
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1):
         """
         Make template MS based on existing MS
@@ -160,7 +435,7 @@ class Template:
         """
 
         if overwrite:
-            if os.path.exists(self.outname):
+            if path.exists(self.outname):
                 rmtree(self.outname)
 
         same_phasedir(self.mslist)
@@ -201,10 +476,12 @@ class Template:
         self.chan_num = self.channels.shape[-1]
 
         if time_res is not None:
-            time_range = np.arange(min_t_lst, max_t_lst + min_dt, time_res)
+            time_range = np.arange(min_t_lst + self.time_lst_offset,
+                                   max_t_lst + min_dt + self.time_lst_offset, time_res)
 
         else:
-            time_range = np.arange(min_t_lst, max_t_lst + min_dt, min_dt/avg_factor)
+            time_range = np.arange(min_t_lst + self.time_lst_offset,
+                                   max_t_lst + min_dt + self.time_lst_offset, min_dt/avg_factor)
 
         baseline_count = n_baselines(len(self.station_info))
         nrows = baseline_count*len(time_range)
@@ -269,234 +546,3 @@ class Template:
         # Cleanup
         if 'tmp' in self.tmpfile:
             rmtree(self.tmpfile)
-
-    def make_mapping_lst(self):
-        """
-        Make mapping json files essential for efficient stacking
-        These map LST times from input MS to template MS.
-        Note that these are not accurate mappings but good first estimate, which are later corrected with final mappings.
-        """
-
-        T = taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {os.path.abspath(self.outname)} ORDER BY TIME")
-
-        ref_time = T.getcol("TIME")
-        time_len = ref_time.__len__()
-        ref_uniq_time = np.unique(ref_time)
-        ref_antennas = np.sort(np.c_[T.getcol("ANTENNA1"), T.getcol("ANTENNA2")])
-
-        T.close()
-
-        def process_antpair(antpair):
-            """
-            Making json files with antenna pair mappings.
-            Mapping INPUT MS idx --> OUTPUT MS idx
-
-            :param:
-                - antpair: antenna pair
-
-            """
-
-            # Get idx
-            pair_idx = squeeze_to_intlist(np.argwhere(np.all(antennas == antpair, axis=1)))
-            ref_pair_idx = squeeze_to_intlist(np.argwhere(np.all(ref_antennas == antpair, axis=1))[time_idxs])
-
-            # Make mapping dict
-            mapping = {int(pair_idx[i]): int(ref_pair_idx[i]) for i in range(min(pair_idx.__len__(), ref_pair_idx.__len__()))}
-
-            # Ensure the mapping folder exists
-            os.makedirs(mapping_folder, exist_ok=True)
-            # Define file path
-            file_path = os.path.join(mapping_folder, '-'.join(antpair.astype(str)) + '.json')
-
-            # Write to file
-            with open(file_path, 'w') as f:
-                json.dump(mapping, f)
-
-        def run_parallel_mapping(uniq_ant_pairs):
-            """
-            Parallel processing of mapping with unique antenna pairs
-
-            :param:
-                - uniq_ant_pairs: unique antenna pairs to loop over in parallel
-            """
-
-            # Number of threads in the pool (adjust based on available resources)
-            with ThreadPoolExecutor(max_workers=max(os.cpu_count()-3, 1)) as executor:
-                # Submit tasks to the executor
-                futures = [executor.submit(process_antpair, antpair) for antpair in uniq_ant_pairs]
-
-                # Optionally, gather results or handle exceptions
-                for future in futures:
-                    future.result()  # This will raise exceptions if any occurred during the execution
-
-        ref_stats, ref_ids = get_station_id(self.outname)
-
-        # Make mapping
-        for ms in self.mslist:
-
-            print(f'\nMapping: {ms}')
-
-            # Open MS table
-            t = taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {os.path.abspath(ms)} ORDER BY TIME")
-
-            # Make antenna mapping in parallel
-            mapping_folder = ms + '_baseline_mapping'
-
-            # Verify if folder exists
-            if not check_folder_exists(mapping_folder):
-                os.makedirs(mapping_folder, exist_ok=False)
-
-                # Get MS info
-                new_stats, new_ids = get_station_id(ms)
-                id_map = dict(zip(new_ids, [ref_stats.index(a) for a in new_stats]))
-
-                # Time in LST
-                time = mjd_seconds_to_lst_seconds(t.getcol("TIME"))
-                uniq_time = np.unique(time)
-                time_idxs = find_closest_index_list(uniq_time, ref_uniq_time)
-
-                # Map antenna pairs to same as ref (template)
-                antennas = np.sort(np.c_[map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)])
-
-                # Unique antenna pairs
-                uniq_ant_pairs = np.unique(np.sort(antennas), axis=0)
-
-                run_parallel_mapping(uniq_ant_pairs)
-            else:
-                print(f'{mapping_folder} already exists')
-
-    def make_uvw(self):
-        """
-        Fill UVW data points
-        """
-
-        # Make baseline/time mapping
-        self.make_mapping_lst()
-
-        def process_baselines(baseline_indices, baselines, mslist):
-            """Process baselines parallel executor"""
-            results = []
-            for b_idx in baseline_indices:
-                baseline = baselines[b_idx]
-                c = 0
-                # uvw = np.memmap('total_uvw.dat', dtype=np.float32, shape=(1, 3), mode='w+')
-                uvw = np.zeros((0, 3))
-                # time = np.memmap('total_time.dat', dtype=np.float64, shape=1, mode='w+')
-                time = np.array([])
-                row_idxs = []
-                for ms_idx, ms in enumerate(sorted(mslist)):
-                    mappingfolder = ms + '_baseline_mapping'
-                    try:
-                        mapjson = json.load(open(mappingfolder + '/' + '-'.join([str(a) for a in baseline]) + '.json'))
-                    except FileNotFoundError:
-                        c += 1
-                        continue
-
-                    row_idxs += list(mapjson.values())
-                    uvw = np.append(np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
-                        [int(i) for i in list(mapjson.keys())]], uvw, axis=0)
-
-                    time = np.append(np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
-
-                results.append((list(np.unique(row_idxs)), uvw, b_idx, time))
-            return results
-
-        # Get baselines
-        ants = table(self.outname + "::ANTENNA", ack=False)
-        baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
-        ants.close()
-
-        T = table(self.outname, readonly=False, ack=False)
-        UVW = np.memmap('UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
-        TIME = np.memmap('TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
-        TIME[:] = T.getcol("TIME")
-
-        for ms_idx, ms in enumerate(sorted(self.mslist)):
-            with table(ms, ack=False) as f:
-                uvw = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
-                time = np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
-
-                uvw[:] = f.getcol("UVW")
-                time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME"))
-
-        # Determine number of workers
-        num_workers = max(os.cpu_count()-5, 1)  # I/O-bound heuristic
-
-        print(f"Using {num_workers} workers for making UVW column and accurate baseline mapping."
-              f"\nThis is an expensive operation. So, be patient..")
-
-        batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
-
-        print("Multithreading...")
-
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            future_to_baseline = {
-                executor.submit(process_baselines, range(i, min(i + batch_size, len(baselines))), baselines,
-                                self.mslist): i
-                for i in range(0, len(baselines), batch_size)
-            }
-
-            for future in as_completed(future_to_baseline):
-                batch_start_idx = future_to_baseline[future]
-                try:
-                    results = future.result()
-                    for row_idxs, uvws, b_idx, time in results:
-                        UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
-                except Exception as exc:
-                    print(f'Batch starting at index {batch_start_idx} generated an exception: {exc}')
-
-        UVW.flush()
-        T.putcol("UVW", UVW)
-        T.close()
-
-
-        # Make final mapping
-        self.make_mapping_uvw()
-
-    def make_mapping_uvw(self):
-        """
-        Make mapping json files essential for efficient stacking based on UVW points
-        """
-
-        def process_baseline(baseline, mslist, UVW):
-            """Parallel processing baseline"""
-            try:
-                folder = '/'.join(mslist[0].split('/')[0:-1])
-                if not folder:
-                    folder = '.'
-                mapping_folder_baseline = sorted(
-                    glob(folder + '/*_mapping/' + '-'.join([str(a) for a in baseline]) + '.json'))
-                idxs_ref = np.unique(
-                    [idx for mapp in mapping_folder_baseline for idx in json.load(open(mapp)).values()])
-                uvw_ref = UVW[list(idxs_ref)]
-                for mapp in mapping_folder_baseline:
-                    idxs = [int(i) for i in json.load(open(mapp)).keys()]
-                    ms = glob('/'.join(mapp.split('/')[0:-1]).replace("_baseline_mapping", ""))[0]
-                    uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
-                    idxs_new = [int(i) for i in np.array(idxs_ref)[
-                        list(find_closest_index_multi_array(uvw_in[:, 0:2], uvw_ref[:, 0:2]))]]
-                    with open(mapp, 'w+') as f:
-                        json.dump(dict(zip(idxs, idxs_new)), f)
-            except Exception as exc:
-                print(f'Baseline {baseline} generated an exception: {exc}')
-
-        # Get baselines
-        ants = table(self.outname + "::ANTENNA", ack=False)
-        baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
-        ants.close()
-
-        UVW = np.memmap('UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
-
-        num_workers = min(os.cpu_count()-5, len(baselines))
-
-        print('\nMake new mapping based on UVW points')
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            future_to_baseline = {executor.submit(process_baseline, baseline, self.mslist, UVW): baseline for baseline in
-                                  baselines}
-            for n, future in enumerate(as_completed(future_to_baseline)):
-                baseline = future_to_baseline[future]
-                try:
-                    future.result()
-                except Exception as exc:
-                    print(f'Baseline {baseline} generated an exception: {exc}')
-                print_progress_bar(n + 1, len(baselines))

@@ -12,6 +12,7 @@ from .utils.smearing import time_resolution
 from .utils.plot import make_baseline_uvw_plots
 from .template_ms import Template
 from .stack_ms import Stack
+from os import system as run_command
 
 
 def parse_args():
@@ -31,6 +32,8 @@ def parse_args():
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files')
     parser.add_argument('--plot_uv_baseline_coverage', action='store_true', help='make plots with baseline versus UV')
+    parser.add_argument('--interpolate_uvw', action='store_true', help='Interpolate UVW with nearest neighbours')
+    parser.add_argument('--overwrite', action='store_true', help='Overwrite output')
 
     return parser.parse_args()
 
@@ -47,7 +50,10 @@ def main():
 
     # Verify if output exists
     if check_folder_exists(args.msout):
-        sys.exit(f"ERROR: {args.msout} already exists! Delete file first if you want to overwrite.")
+        if args.overwrite:
+            run_command(f'rm -rf {args.msout} && sleep 3')
+        else:
+            sys.exit(f"ERROR: {args.msout} already exists! Delete file first if you want to overwrite.")
 
     avg = 1
     if args.time_res is not None:
@@ -66,7 +72,10 @@ def main():
 
     t = Template(args.msin, args.msout)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg)
-    t.make_uvw()
+    if args.interpolate_uvw:
+        t.interpolate_uvw()
+    else:
+        t.calculate_uvw()
     print("\n############\nTemplate creation completed\n############")
 
     # Stack MS
@@ -74,7 +83,7 @@ def main():
         if args.record_time:
             start_time = time.time()
         s = Stack(args.msin, args.msout, chunkmem=args.chunk_mem)
-        s.stack_all()
+        s.stack_all(avg_uvw=args.interpolate_uvw)
         if args.record_time:
             end_time = time.time()
             elapsed_time = end_time - start_time
