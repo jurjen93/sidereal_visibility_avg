@@ -1,6 +1,9 @@
 import numpy as np
 from joblib import Parallel, delayed
 import tempfile
+import json
+from os import path, makedirs, cpu_count
+from .helpers import squeeze_to_intlist
 
 
 def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
@@ -54,3 +57,52 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=T
     Parallel(n_jobs=n_jobs, prefer="threads")(delayed(sum_chunk_to_result)(start, end) for start, end in chunks)
 
     return result_array
+
+def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
+    """
+    Process a batch of antenna pairs, creating JSON mappings.
+    """
+
+    mapping_batch = {}
+    for antpair in antpair_batch:
+        pair_idx = squeeze_to_intlist(np.argwhere(np.all(antennas == antpair, axis=1)))
+        ref_pair_idx = squeeze_to_intlist(np.argwhere(np.all(ref_antennas == antpair, axis=1))[time_idxs])
+
+        # Create the mapping dictionary for each pair
+        mapping = {int(pair_idx[i]): int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
+        mapping_batch[tuple(antpair)] = mapping  # Store in batch
+
+    return mapping_batch
+
+def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder, io_batch_size=5):
+    """
+    Parallel processing of mapping with unique antenna pairs using joblib.
+    Batch antenna pairs and write results in chunks to minimize I/O overhead.
+    """
+
+    # Determine optimal batch size
+    batch_size = max(len(uniq_ant_pairs) // 10, 1)
+
+    results = Parallel(n_jobs=max(cpu_count() - 3, 1), backend="loky")(
+        delayed(process_antpair_batch)(uniq_ant_pairs[i:i + batch_size], antennas, ref_antennas, time_idxs)
+        for i in range(0, len(uniq_ant_pairs), batch_size)
+    )
+
+    # Write the JSON mappings in batches to minimize I/O overhead
+    for batch_idx in range(0, len(results), io_batch_size):
+        try:
+            batch_results = results[batch_idx:batch_idx + io_batch_size]
+            mappings_to_write = {}
+
+            # Collect all mappings in this I/O batch
+            for mapping_batch in batch_results:
+                mappings_to_write.update(mapping_batch)
+
+            # Write to disk in a single batch
+            for antpair, mapping in mappings_to_write.items():
+                file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
+                with open(file_path, 'w') as f:
+                    json.dump(mapping, f)
+
+        except Exception as e:
+            print(f"An error occurred while writing the mappings: {e}")

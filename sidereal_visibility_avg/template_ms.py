@@ -6,11 +6,11 @@ from shutil import rmtree
 from pprint import pprint
 import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from joblib import Parallel, delayed
 from glob import glob
+from .utils.parallel import run_parallel_mapping
 from .utils.dysco import decompress
 from .utils.helpers import (print_progress_bar, repeat_elements, map_array_dict, find_closest_index_multi_array,
-                           find_closest_index_list, squeeze_to_intlist)
+                           find_closest_index_list)
 from .utils.files import check_folder_exists
 
 from .utils.ms_info import (get_ms_content, get_station_id, same_phasedir, unique_station_list, n_baselines,
@@ -190,46 +190,6 @@ class Template:
             ref_antennas = np.c_[T.getcol("ANTENNA1"), T.getcol("ANTENNA2")]
 
         ref_uniq_time = np.unique(ref_time)
-
-        def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
-            """
-            Process a batch of antenna pairs, creating JSON mappings.
-            """
-
-            mapping_batch = {}
-            for antpair in antpair_batch:
-                pair_idx = squeeze_to_intlist(np.argwhere(np.all(antennas == antpair, axis=1)))
-                ref_pair_idx = squeeze_to_intlist(np.argwhere(np.all(ref_antennas == antpair, axis=1))[time_idxs])
-
-                # Create the mapping dictionary for each pair
-                mapping = {int(pair_idx[i]): int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
-                mapping_batch[tuple(antpair)] = mapping  # Store in batch
-
-            return mapping_batch
-
-        def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder):
-            """
-            Parallel processing of mapping with unique antenna pairs using joblib.
-            Batch antenna pairs to minimize overhead.
-            """
-
-            batch_size = max(len(uniq_ant_pairs) // 100, 1)
-
-            # Use joblib's Parallel with delayed for process-based parallelism
-            results = Parallel(n_jobs=max(cpu_count() - 3, 1))(
-                delayed(process_antpair_batch)(uniq_ant_pairs[i:i + batch_size], antennas, ref_antennas, time_idxs)
-                for i in range(0, len(uniq_ant_pairs), batch_size)
-            )
-
-            # Collect the results and write mappings
-            for mapping_batch in results:
-                try:
-                    for antpair, mapping in mapping_batch.items():
-                        file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
-                        with open(file_path, 'w') as f:
-                            json.dump(mapping, f)
-                except Exception as e:
-                    print(f"An error occurred while writing the mappings: {e}")
 
         ref_stats, ref_ids = get_station_id(outname)
 
