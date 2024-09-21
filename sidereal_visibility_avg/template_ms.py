@@ -5,7 +5,7 @@ from os import system as run_command
 from shutil import rmtree
 from pprint import pprint
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed, ThreadPoolExecutor
 from glob import glob
 from .utils.dysco import decompress
 from .utils.helpers import (print_progress_bar, repeat_elements, map_array_dict, find_closest_index_multi_array,
@@ -213,19 +213,20 @@ class Template:
         def run_parallel_mapping(uniq_ant_pairs):
             """
             Parallel processing of mapping with unique antenna pairs
-
             :param:
                 - uniq_ant_pairs: unique antenna pairs to loop over in parallel
             """
-
             # Number of threads in the pool (adjust based on available resources)
-            with ThreadPoolExecutor(max_workers=max(cpu_count()-3, 1)) as executor:
+            with ThreadPoolExecutor(max_workers=max(cpu_count() - 3, 1)) as executor:
                 # Submit tasks to the executor
                 futures = [executor.submit(process_antpair, antpair) for antpair in uniq_ant_pairs]
 
-                # Optionally, gather results or handle exceptions
-                for future in futures:
-                    future.result()  # This will raise exceptions if any occurred during the execution
+                # Process futures as they complete
+                for future in as_completed(futures):
+                    try:
+                        future.result()  # This will raise exceptions if any occurred during the execution
+                    except Exception as e:
+                        print(f"An error occurred: {e}")
 
         ref_stats, ref_ids = get_station_id(self.outname)
 
@@ -446,12 +447,12 @@ class Template:
         min_t_lst, min_dt, dfreq_min, max_t_lst = None, None, None, None
 
         def process_ms(ms):
-            """Parallel"""
+            """Process MS content in parallel (using separate processes)"""
             mscontent = get_ms_content(ms)
             stations, lofar_stations, channels, dfreq, total_time_seconds, dt, min_t, max_t = mscontent.values()
             return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
 
-        with ThreadPoolExecutor() as executor:
+        with ProcessPoolExecutor() as executor:
             future_to_ms = {executor.submit(process_ms, ms): ms for ms in self.mslist}
             for future in as_completed(future_to_ms):
                 stations, lofar_stations, channels, dfreq, dt, min_t, max_t = future.result()
