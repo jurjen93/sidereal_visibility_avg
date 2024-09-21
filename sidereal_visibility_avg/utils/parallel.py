@@ -113,43 +113,23 @@ def process_ms(ms):
 
 
 def process_baseline(baseline, mslist, UVW):
-    """Parallel processing for baseline mapping based on UVW coordinates."""
+    """Parallel processing baseline"""
     try:
-
-        folder = '/'.join(mslist[0].split('/')[:-1])
+        folder = '/'.join(mslist[0].split('/')[0:-1])
         if not folder:
             folder = '.'
-
-        mapping_files = glob(f'{folder}/*_mapping/' + '-'.join(map(str, baseline)) + '.json')
-
-        # Pre-load and cache reference indices and UVW data to minimize repeated file reads
-        idxs_ref = set()  # Using a set for uniqueness and better performance
-        for mapping_file in mapping_files:
-            with open(mapping_file) as f:
-                mapping_data = json.load(f)
-                idxs_ref.update(map(int, mapping_data.values()))  # Collect all unique indices
-
-        # Convert to sorted list once for efficient numpy operations
-        idxs_ref = sorted(idxs_ref)
-        uvw_ref = UVW[idxs_ref]  # Load UVW reference data once
-
-        # Process each mapping file and update based on UVW coordinates
-        for mapping_file in mapping_files:
-            with open(mapping_file) as f:
-                idxs = list(map(int, json.load(f).keys()))  # Original indices from mapping
-
-            ms_file = (glob(f'{folder}/' + '_'.join(mapping_file.split('/')[-1].split('_')[:-2]) + '*')[0]
-                       .replace("_baseline_mapping", ""))
-            uvw_in = np.memmap(f'{ms_file}_uvw.tmp.dat', dtype=np.float32, mode='r').reshape(-1, 3)[idxs]
-
-            # Efficiently find closest indices using vectorized operations
-            idxs_new = np.array(idxs_ref)[
-                find_closest_index_multi_array(uvw_in[:, :2], uvw_ref[:, :2])
-            ]
-
-            # Update JSON file in one I/O operation
-            with open(mapping_file, 'w') as f:
+        mapping_folder_baseline = sorted(
+            glob(folder + '/*_mapping/' + '-'.join([str(a) for a in baseline]) + '.json'))
+        idxs_ref = np.unique(
+            [idx for mapp in mapping_folder_baseline for idx in json.load(open(mapp)).values()])
+        uvw_ref = UVW[list(idxs_ref)]
+        for mapp in mapping_folder_baseline:
+            idxs = [int(i) for i in json.load(open(mapp)).keys()]
+            ms = glob('/'.join(mapp.split('/')[0:-1]).replace("_baseline_mapping", ""))[0]
+            uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
+            idxs_new = [int(i) for i in np.array(idxs_ref)[
+                list(find_closest_index_multi_array(uvw_in[:, 0:2], uvw_ref[:, 0:2]))]]
+            with open(mapp, 'w+') as f:
                 json.dump(dict(zip(idxs, idxs_new)), f)
-
     except Exception as exc:
         print(f'Baseline {baseline} generated an exception: {exc}')
