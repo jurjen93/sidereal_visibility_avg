@@ -18,6 +18,13 @@ from .utils.uvw import resample_uwv
 from .utils.lst import mjd_seconds_to_lst_seconds
 
 
+def process_ms(ms):
+    """Process MS content in parallel (using separate processes)"""
+    mscontent = get_ms_content(ms)
+    stations, lofar_stations, channels, dfreq, total_time_seconds, dt, min_t, max_t = mscontent.values()
+    return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
+
+
 class Template:
     """Make template measurement set based on input measurement sets"""
     def __init__(self, msin: list = None, outname: str = 'empty.ms'):
@@ -445,12 +452,6 @@ class Template:
         # Initialize variables outside the loop
         unique_stations, unique_channels, unique_lofar_stations = [], [], []
         min_t_lst, min_dt, dfreq_min, max_t_lst = None, None, None, None
-
-        def process_ms(ms):
-            """Process MS content in parallel (using separate processes)"""
-            mscontent = get_ms_content(ms)
-            stations, lofar_stations, channels, dfreq, total_time_seconds, dt, min_t, max_t = mscontent.values()
-            return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
 
         with ProcessPoolExecutor() as executor:
             future_to_ms = {executor.submit(process_ms, ms): ms for ms in self.mslist}
