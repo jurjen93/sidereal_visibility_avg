@@ -138,7 +138,8 @@ def process_baseline(baseline, mslist, UVW):
             with open(mapping_file) as f:
                 idxs = list(map(int, json.load(f).keys()))  # Original indices from mapping
 
-            ms_file = glob(f'{folder}/' + '_'.join(mapping_file.split('/')[-1].split('_')[:-2]) + '*')[0]
+            ms_file = (glob(f'{folder}/' + '_'.join(mapping_file.split('/')[-1].split('_')[:-2]) + '*')[0]
+                       .replace("_baseline_mapping", ""))
             uvw_in = np.memmap(f'{ms_file}_uvw.tmp.dat', dtype=np.float32, mode='r').reshape(-1, 3)[idxs]
 
             # Efficiently find closest indices using vectorized operations

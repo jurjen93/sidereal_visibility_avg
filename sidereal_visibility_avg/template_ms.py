@@ -22,7 +22,7 @@ class Template:
         self.mslist = msin
         self.outname = outname
 
-        # How much time to new day
+        # Time offset to sidereal day from output MS
         self._time_lst_offset = None
 
     @property
@@ -245,9 +245,7 @@ class Template:
             for b_idx in baseline_indices:
                 baseline = baselines[b_idx]
                 c = 0
-                # uvw = np.memmap('total_uvw.dat', dtype=np.float32, shape=(1, 3), mode='w+')
                 uvw = np.zeros((0, 3))
-                # time = np.memmap('total_time.dat', dtype=np.float64, shape=1, mode='w+')
                 time = np.array([])
                 row_idxs = []
                 for ms_idx, ms in enumerate(sorted(mslist)):
@@ -286,7 +284,7 @@ class Template:
                 time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
 
         # Determine number of workers
-        num_workers = max(cpu_count()-5, 1)  # I/O-bound heuristic
+        num_workers = max(cpu_count()-3, 1)  # I/O-bound heuristic
 
         print(f"Using {num_workers} workers for making UVW column and accurate baseline mapping."
               f"\nThis is an expensive operation. So, be patient..")
