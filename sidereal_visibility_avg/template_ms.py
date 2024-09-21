@@ -310,8 +310,6 @@ class Template:
 
         UVW = np.memmap('UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
 
-        print(UVW)
-
         num_workers = min(cpu_count()-3, len(baselines))
 
         print('\nMake new mapping based on UVW points')
