@@ -7,7 +7,7 @@ from pprint import pprint
 import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from .utils.parallel import run_parallel_mapping, process_ms, process_baseline
+from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
 from .utils.dysco import decompress
 from .utils.helpers import print_progress_bar, repeat_elements, map_array_dict, find_closest_index_list
 from .utils.files import check_folder_exists
@@ -239,32 +239,6 @@ class Template:
         # Make baseline/time mapping
         self.make_mapping_lst()
 
-        def process_baselines(baseline_indices, baselines, mslist):
-            """Process baselines parallel executor"""
-            results = []
-            for b_idx in baseline_indices:
-                baseline = baselines[b_idx]
-                c = 0
-                uvw = np.zeros((0, 3))
-                time = np.array([])
-                row_idxs = []
-                for ms_idx, ms in enumerate(sorted(mslist)):
-                    mappingfolder = ms + '_baseline_mapping'
-                    try:
-                        mapjson = json.load(open(mappingfolder + '/' + '-'.join([str(a) for a in baseline]) + '.json'))
-                    except FileNotFoundError:
-                        c += 1
-                        continue
-
-                    row_idxs += list(mapjson.values())
-                    uvw = np.append(np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
-                        [int(i) for i in list(mapjson.keys())]], uvw, axis=0)
-
-                    time = np.append(np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
-
-                results.append((list(np.unique(row_idxs)), uvw, b_idx, time))
-            return results
-
         # Get baselines
         ants = table(self.outname + "::ANTENNA", ack=False)
         baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
@@ -295,7 +269,7 @@ class Template:
 
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             future_to_baseline = {
-                executor.submit(process_baselines, range(i, min(i + batch_size, len(baselines))), baselines,
+                executor.submit(process_baseline_int, range(i, min(i + batch_size, len(baselines))), baselines,
                                 self.mslist): i
                 for i in range(0, len(baselines), batch_size)
             }
@@ -342,7 +316,7 @@ class Template:
 
         print('\nMake new mapping based on UVW points')
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            future_to_baseline = {executor.submit(process_baseline, baseline, self.mslist, UVW): baseline for baseline
+            future_to_baseline = {executor.submit(process_baseline_uvw, baseline, self.mslist, UVW): baseline for baseline
                                   in baselines}
 
             for n, future in enumerate(as_completed(future_to_baseline)):

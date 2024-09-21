@@ -112,7 +112,7 @@ def process_ms(ms):
     return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
 
 
-def process_baseline(baseline, mslist, UVW):
+def process_baseline_uvw(baseline, mslist, UVW):
     """Parallel processing baseline"""
     try:
         folder = '/'.join(mslist[0].split('/')[0:-1])
@@ -133,3 +133,30 @@ def process_baseline(baseline, mslist, UVW):
                 json.dump(dict(zip(idxs, idxs_new)), f)
     except Exception as exc:
         print(f'Baseline {baseline} generated an exception: {exc}')
+
+
+def process_baseline_int(baseline_indices, baselines, mslist):
+    """Process baselines parallel executor"""
+    results = []
+    for b_idx in baseline_indices:
+        baseline = baselines[b_idx]
+        c = 0
+        uvw = np.zeros((0, 3))
+        time = np.array([])
+        row_idxs = []
+        for ms_idx, ms in enumerate(sorted(mslist)):
+            mappingfolder = ms + '_baseline_mapping'
+            try:
+                mapjson = json.load(open(mappingfolder + '/' + '-'.join([str(a) for a in baseline]) + '.json'))
+            except FileNotFoundError:
+                c += 1
+                continue
+
+            row_idxs += list(mapjson.values())
+            uvw = np.append(np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
+                [int(i) for i in list(mapjson.keys())]], uvw, axis=0)
+
+            time = np.append(np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
+
+        results.append((list(np.unique(row_idxs)), uvw, b_idx, time))
+    return results
