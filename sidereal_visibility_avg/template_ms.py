@@ -180,21 +180,21 @@ class Template:
         Make mapping json files essential for efficient stacking.
         These map LST times from input MS to template MS.
         """
+
         outname = self.outname  # Cache instance variables locally
         time_lst_offset = self.time_lst_offset
 
-        # Open MS table and fetch columns once
         with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(outname)} ORDER BY TIME") as T:
             ref_time = T.getcol("TIME")
             ref_antennas = np.c_[T.getcol("ANTENNA1"), T.getcol("ANTENNA2")]
 
-        # Precompute unique times and antenna pairs once
         ref_uniq_time = np.unique(ref_time)
 
         def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
             """
             Process a batch of antenna pairs, creating JSON mappings.
             """
+
             mapping_batch = {}
             for antpair in antpair_batch:
                 pair_idx = squeeze_to_intlist(np.argwhere(np.all(antennas == antpair, axis=1)))
@@ -211,7 +211,8 @@ class Template:
             Parallel processing of mapping with unique antenna pairs.
             Batch antenna pairs to minimize overhead.
             """
-            batch_size = 100  # Tune this based on performance (larger batch size reduces I/O and task overhead)
+
+            batch_size = len(uniq_ant_pairs)//100
             with ThreadPoolExecutor(max_workers=max(cpu_count() - 3, 1)) as executor:
                 futures = []
                 for i in range(0, len(uniq_ant_pairs), batch_size):
