@@ -6,6 +6,7 @@ from shutil import rmtree
 from pprint import pprint
 import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from joblib import Parallel, delayed
 from glob import glob
 from .utils.dysco import decompress
 from .utils.helpers import (print_progress_bar, repeat_elements, map_array_dict, find_closest_index_multi_array,
@@ -208,32 +209,27 @@ class Template:
 
         def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder):
             """
-            Parallel processing of mapping with unique antenna pairs using ProcessPoolExecutor.
+            Parallel processing of mapping with unique antenna pairs using joblib.
             Batch antenna pairs to minimize overhead.
             """
 
-            # Determine the batch size, and adjust it based on the size of unique antenna pairs
             batch_size = max(len(uniq_ant_pairs) // 100, 1)
 
-            with ProcessPoolExecutor(max_workers=max(cpu_count() - 3, 1)) as executor:
-                futures = []
+            # Use joblib's Parallel with delayed for process-based parallelism
+            results = Parallel(n_jobs=max(cpu_count() - 3, 1))(
+                delayed(process_antpair_batch)(uniq_ant_pairs[i:i + batch_size], antennas, ref_antennas, time_idxs)
+                for i in range(0, len(uniq_ant_pairs), batch_size)
+            )
 
-                # Submit the tasks in batches
-                for i in range(0, len(uniq_ant_pairs), batch_size):
-                    antpair_batch = uniq_ant_pairs[i:i + batch_size]
-                    futures.append(
-                        executor.submit(process_antpair_batch, antpair_batch, antennas, ref_antennas, time_idxs))
-
-                # Collect the results and write mappings
-                for future in as_completed(futures):
-                    try:
-                        mapping_batch = future.result()  # Get the batch of mappings
-                        for antpair, mapping in mapping_batch.items():
-                            file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
-                            with open(file_path, 'w') as f:
-                                json.dump(mapping, f)
-                    except Exception as e:
-                        print(f"An error occurred: {e}")
+            # Collect the results and write mappings
+            for mapping_batch in results:
+                try:
+                    for antpair, mapping in mapping_batch.items():
+                        file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
+                        with open(file_path, 'w') as f:
+                            json.dump(mapping, f)
+                except Exception as e:
+                    print(f"An error occurred while writing the mappings: {e}")
 
         ref_stats, ref_ids = get_station_id(outname)
 
