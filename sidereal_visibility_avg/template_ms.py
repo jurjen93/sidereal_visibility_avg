@@ -228,7 +228,7 @@ class Template:
                     f"up.type=upsample up.timestep=2 up.updateuvw=True avg.timestep=2 avg.type=averager "
                     f"&& rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}")
 
-        # Update baseline mapping TODO: remove LST mapping
+        # Update baseline mapping
         self.make_mapping_uvw()
 
     def interpolate_uvw(self):
@@ -342,10 +342,8 @@ class Template:
 
         print('\nMake new mapping based on UVW points')
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-
-            future_to_baseline = {
-                executor.submit(process_baseline, baseline, self.mslist, UVW): baseline for baseline in baselines
-            }
+            future_to_baseline = {executor.submit(process_baseline, baseline, self.mslist, UVW): baseline for baseline
+                                  in baselines}
 
             for n, future in enumerate(as_completed(future_to_baseline)):
                 baseline = future_to_baseline[future]
@@ -353,6 +351,7 @@ class Template:
                     future.result()  # Get the result
                 except Exception as exc:
                     print(f'Baseline {baseline} generated an exception: {exc}')
+
                 print_progress_bar(n + 1, len(baselines))
 
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1):
