@@ -4,7 +4,6 @@ from os import path, makedirs, cpu_count
 from os import system as run_command
 from shutil import rmtree
 from pprint import pprint
-import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
@@ -308,6 +307,8 @@ class Template:
                         np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
 
         UVW = np.memmap('UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
+
+        print(UVW)
 
         num_workers = min(cpu_count()-3, len(baselines))
 
