@@ -6,47 +6,14 @@ from shutil import rmtree
 from pprint import pprint
 import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from glob import glob
-from .utils.parallel import run_parallel_mapping
-from .utils.dysco import decompress
-from .utils.helpers import (print_progress_bar, repeat_elements, map_array_dict, find_closest_index_multi_array,
-                           find_closest_index_list)
-from .utils.files import check_folder_exists
 
-from .utils.ms_info import (get_ms_content, get_station_id, same_phasedir, unique_station_list, n_baselines,
-                           make_ant_pairs)
+from .utils.parallel import run_parallel_mapping, process_ms, process_baseline
+from .utils.dysco import decompress
+from .utils.helpers import print_progress_bar, repeat_elements, map_array_dict, find_closest_index_list
+from .utils.files import check_folder_exists
+from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
 from .utils.uvw import resample_uwv
 from .utils.lst import mjd_seconds_to_lst_seconds, mjd_seconds_to_lst_seconds_single
-
-
-def process_ms(ms):
-    """Process MS content in parallel (using separate processes)"""
-    mscontent = get_ms_content(ms)
-    stations, lofar_stations, channels, dfreq, total_time_seconds, dt, min_t, max_t = mscontent.values()
-    return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
-
-
-def process_baseline(baseline, mslist, UVW):
-    """Parallel processing baseline"""
-    try:
-        folder = '/'.join(mslist[0].split('/')[0:-1])
-        if not folder:
-            folder = '.'
-        mapping_folder_baseline = sorted(
-            glob(folder + '/*_mapping/' + '-'.join([str(a) for a in baseline]) + '.json'))
-        idxs_ref = np.unique(
-            [idx for mapp in mapping_folder_baseline for idx in json.load(open(mapp)).values()])
-        uvw_ref = UVW[list(idxs_ref)]
-        for mapp in mapping_folder_baseline:
-            idxs = [int(i) for i in json.load(open(mapp)).keys()]
-            ms = glob('/'.join(mapp.split('/')[0:-1]).replace("_baseline_mapping", ""))[0]
-            uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
-            idxs_new = [int(i) for i in np.array(idxs_ref)[
-                list(find_closest_index_multi_array(uvw_in[:, 0:2], uvw_ref[:, 0:2]))]]
-            with open(mapp, 'w+') as f:
-                json.dump(dict(zip(idxs, idxs_new)), f)
-    except Exception as exc:
-        print(f'Baseline {baseline} generated an exception: {exc}')
 
 
 class Template:
@@ -373,21 +340,22 @@ class Template:
 
         UVW = np.memmap('UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
 
-        num_workers = min(cpu_count()-5, len(baselines))
+        num_workers = min(cpu_count()-3, len(baselines))
 
         print('\nMake new mapping based on UVW points')
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            future_to_baseline = {executor.submit(process_baseline, baseline, self.mslist, UVW): baseline for baseline
-                                  in baselines}
+
+            future_to_baseline = {
+                executor.submit(process_baseline, baseline, self.mslist, UVW): baseline for baseline in baselines
+            }
 
             for n, future in enumerate(as_completed(future_to_baseline)):
                 baseline = future_to_baseline[future]
                 try:
-                    future.result()  # Get the result, which will also raise exceptions if any occurred
+                    future.result()  # Get the result
                 except Exception as exc:
                     print(f'Baseline {baseline} generated an exception: {exc}')
-
-                print_progress_bar(n + 1, len(baselines))  # Progress bar updates after each baseline completes
+                print_progress_bar(n + 1, len(baselines))
 
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1):
         """
@@ -406,7 +374,6 @@ class Template:
         same_phasedir(self.mslist)
 
         # Get data columns
-        # Initialize variables outside the loop
         unique_stations, unique_channels, unique_lofar_stations = [], [], []
         min_t_lst, min_dt, dfreq_min, max_t_lst = None, None, None, None
 

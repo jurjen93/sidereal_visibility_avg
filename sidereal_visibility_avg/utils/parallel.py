@@ -4,6 +4,9 @@ import tempfile
 import json
 from os import path, cpu_count
 from .helpers import squeeze_to_intlist
+from glob import glob
+from .helpers import find_closest_index_multi_array
+from .ms_info import get_ms_content
 
 
 def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
@@ -100,3 +103,52 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
 
     except Exception as e:
         print(f"An error occurred while writing the mappings: {e}")
+
+
+def process_ms(ms):
+    """Process MS content in parallel (using separate processes)"""
+    mscontent = get_ms_content(ms)
+    stations, lofar_stations, channels, dfreq, total_time_seconds, dt, min_t, max_t = mscontent.values()
+    return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
+
+
+def process_baseline(baseline, mslist, UVW):
+    """Parallel processing for baseline mapping based on UVW coordinates."""
+    try:
+
+        folder = '/'.join(mslist[0].split('/')[:-1])
+        if not folder:
+            folder = '.'
+
+        mapping_files = glob(f'{folder}/*_mapping/' + '-'.join(map(str, baseline)) + '.json')
+
+        # Pre-load and cache reference indices and UVW data to minimize repeated file reads
+        idxs_ref = set()  # Using a set for uniqueness and better performance
+        for mapping_file in mapping_files:
+            with open(mapping_file) as f:
+                mapping_data = json.load(f)
+                idxs_ref.update(map(int, mapping_data.values()))  # Collect all unique indices
+
+        # Convert to sorted list once for efficient numpy operations
+        idxs_ref = sorted(idxs_ref)
+        uvw_ref = UVW[idxs_ref]  # Load UVW reference data once
+
+        # Process each mapping file and update based on UVW coordinates
+        for mapping_file in mapping_files:
+            with open(mapping_file) as f:
+                idxs = list(map(int, json.load(f).keys()))  # Original indices from mapping
+
+            ms_file = glob(f'{folder}/' + '_'.join(mapping_file.split('/')[-1].split('_')[:-2]) + '*')[0]
+            uvw_in = np.memmap(f'{ms_file}_uvw.tmp.dat', dtype=np.float32, mode='r').reshape(-1, 3)[idxs]
+
+            # Efficiently find closest indices using vectorized operations
+            idxs_new = np.array(idxs_ref)[
+                find_closest_index_multi_array(uvw_in[:, :2], uvw_ref[:, :2])
+            ]
+
+            # Update JSON file in one I/O operation
+            with open(mapping_file, 'w') as f:
+                json.dump(dict(zip(idxs, idxs_new)), f)
+
+    except Exception as exc:
+        print(f'Baseline {baseline} generated an exception: {exc}')

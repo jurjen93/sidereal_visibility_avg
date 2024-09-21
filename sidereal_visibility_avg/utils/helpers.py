@@ -110,8 +110,8 @@ def find_closest_index_list(a1, a2):
 
 def find_closest_index_multi_array(a1, a2):
     """
-    Find the indices of the closest values between two multi-D arrays, preserving nearest neighbor relationships
-    even when the arrays are negated.
+    Find the indices of the closest values between two multi-D arrays (a1 and a2),
+    considering both the original and negated versions of a2 without duplicating the data.
 
     :param:
         - a1: first array (shape NxM)
@@ -120,24 +120,23 @@ def find_closest_index_multi_array(a1, a2):
     :return:
         - A list of indices corresponding to the nearest neighbors in a2 for each point in a1.
     """
-
     # Ensure inputs are numpy arrays
     a1 = np.asarray(a1)
     a2 = np.asarray(a2)
 
-    # Concatenate the original and negated versions of a2
-    combined_a2 = np.vstack((a2, -a2))
-
-    # Build a KDTree for the combined array (original + negated)
-    tree = cKDTree(combined_a2)
+    # Build a KDTree for a2 only (without negating or doubling the array)
+    tree = cKDTree(a2)
 
     # Query the tree for the closest points in a1
     distances, indices = tree.query(a1)
 
-    # Handle the indices since we doubled the array by adding -a2
-    final_indices = [i if i < len(a2) else i - len(a2) for i in indices]
+    # Now check for negated versions of a1, directly
+    neg_distances, neg_indices = tree.query(-a1)
 
-    return list(final_indices)
+    # Combine the results from both queries
+    final_indices = np.where(neg_distances < distances, neg_indices, indices)
+
+    return final_indices.tolist()
 
 
 def map_array_dict(arr, dct):
