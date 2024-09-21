@@ -93,7 +93,7 @@ def find_closest_index(arr, value):
 
 def find_closest_index_list(a1, a2):
     """
-    Find the indices of the closest values between two arrays.
+    Find the indices of the closest values between two arrays using KDTree.
 
     :param:
         - a1: first array
@@ -102,7 +102,9 @@ def find_closest_index_list(a1, a2):
     :return:
         - The indices of the closest value in the array.
     """
-    return abs(np.array(a1)[:, None] - np.array(a2)).argmin(axis=1)
+    a2_tree = cKDTree(np.array(a2)[:, None])  # Build a KDTree for a2
+    distances, indices = a2_tree.query(np.array(a1)[:, None], k=1)  # Query for nearest neighbors
+    return indices
 
 
 def find_closest_index_multi_array(a1, a2):

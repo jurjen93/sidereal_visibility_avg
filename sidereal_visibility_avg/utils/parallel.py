@@ -84,14 +84,13 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
     batch_size = max(len(uniq_ant_pairs) // (cpu_count() * 2), 1)  # Split tasks across all cores
 
     # Use joblib's Parallel with delayed for process-based parallelism
-    # Maximize CPU core utilization
     n_jobs = max(cpu_count()-3, 1)  # Use all available CPU cores
     results = Parallel(n_jobs=n_jobs, backend="loky")(
         delayed(process_antpair_batch)(uniq_ant_pairs[i:i + batch_size], antennas, ref_antennas, time_idxs)
         for i in range(0, len(uniq_ant_pairs), batch_size)
     )
 
-    # Write the JSON mappings immediately after processing each batch
+    # Write the JSON mappings after processing each batch
     try:
         for mapping_batch in results:
             for antpair, mapping in mapping_batch.items():
