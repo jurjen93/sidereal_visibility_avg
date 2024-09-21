@@ -21,9 +21,10 @@ def same_phasedir(mslist: list = None):
                 exit("MS do not have the same phase center, check "+ms)
 
 
+
 def get_ms_content(ms):
     """
-    Get MS content
+    Get MS content with speed optimizations.
 
     :param:
         - ms: measurement set
@@ -35,62 +36,60 @@ def get_ms_content(ms):
         - delta time
     """
 
-    T = table(ms, ack=False)
-    F = table(ms+"::SPECTRAL_WINDOW", ack=False)
-    A = table(ms+"::ANTENNA", ack=False)
-    L = table(ms+"::LOFAR_ANTENNA_FIELD", ack=False)
-    S = table(ms+"::LOFAR_STATION", ack=False)
+    with table(ms, ack=False) as T, \
+         table(ms+"::SPECTRAL_WINDOW", ack=False) as F, \
+         table(ms+"::ANTENNA", ack=False) as A, \
+         table(ms+"::LOFAR_ANTENNA_FIELD", ack=False) as L, \
+         table(ms+"::LOFAR_STATION", ack=False) as S:
 
-    # Get all lofar antenna info
-    lofar_stations = list(zip(
-                        S.getcol("NAME"),
-                        S.getcol("CLOCK_ID")
-                    ))
+        # Get LOFAR antenna info in a single call
+        lofar_stations = np.column_stack((S.getcol("NAME"), S.getcol("CLOCK_ID"))).tolist()
 
-    # Get all station information
-    stations = list(zip(
-                   A.getcol("NAME"),
-                   A.getcol("POSITION"),
-                   A.getcol("DISH_DIAMETER"),
-                   A.getcol("LOFAR_STATION_ID"),
-                   A.getcol("LOFAR_PHASE_REFERENCE"),
-                   L.getcol("NAME"),
-                   L.getcol("COORDINATE_AXES"),
-                   L.getcol("TILE_ELEMENT_OFFSET"),
-                ))
+        # Retrieve relevant columns from ANTENNA and LOFAR_ANTENNA_FIELD tables
+        antenna_cols = [
+            A.getcol("NAME"), A.getcol("POSITION"), A.getcol("DISH_DIAMETER"),
+            A.getcol("LOFAR_STATION_ID"), A.getcol("LOFAR_PHASE_REFERENCE"),
+            L.getcol("NAME"), L.getcol("COORDINATE_AXES"), L.getcol("TILE_ELEMENT_OFFSET")
+        ]
+        stations = list(zip(*antenna_cols))
 
-    chan_num = F.getcol("NUM_CHAN")[0]
-    channels = F.getcol("CHAN_FREQ")[0]
-    dfreq = np.diff(sorted(set(channels)))[0]
-    time = sorted(np.unique(T.getcol("TIME")))
-    time_lst = mjd_seconds_to_lst_seconds(T.getcol("TIME"))
-    time_min_lst, time_max_lst = time_lst.min(), time_lst.max()
-    total_time_seconds = max(time)-min(time)
-    dt = np.diff(sorted(set(time)))[0]
+        # Read channel frequencies and calculate delta frequency
+        channels = F.getcol("CHAN_FREQ")[0]
+        dfreq = np.diff(channels)[0]  # Assuming uniform spacing
 
+        # Get unique and sorted times to calculate total time and delta time
+        time = np.unique(T.getcol("TIME"))
+        if len(time) > 1:
+            total_time_seconds = time[-1] - time[0]
+            dt = np.min(np.diff(time))
+        else:
+            total_time_seconds = 0
+            dt = 0
+
+        # Convert time to LST in one call
+        time_lst = mjd_seconds_to_lst_seconds(time)
+        time_min_lst, time_max_lst = time_lst.min(), time_lst.max()
+
+    # Print output (could be skipped for speed)
     print(f'\nCONTENT from {ms}\n'
           '----------\n'
           f'Stations: {", ".join([s[0] for s in lofar_stations])}\n'
-          f'Number of channels: {chan_num}\n'
+          f'Number of channels: {len(channels)}\n'
           f'Channel width: {dfreq} Hz\n'
-          f'Total time: {round(total_time_seconds/3600, 2)} hrs\n'
+          f'Total time: {round(total_time_seconds / 3600, 2)} hrs\n'
           f'Delta time: {dt} seconds\n'
           f'----------')
 
-    S.close()
-    L.close()
-    T.close()
-    F.close()
-    A.close()
-
-    return {'stations': stations,
-            'lofar_stations': lofar_stations,
-            'channels': channels,
-            'dfreq': dfreq,
-            'total_time_seconds': total_time_seconds,
-            'dt': dt,
-            'time_min_lst': time_min_lst,
-            'time_max_lst': time_max_lst}
+    return {
+        'stations': stations,
+        'lofar_stations': lofar_stations,
+        'channels': channels,
+        'dfreq': dfreq,
+        'total_time_seconds': total_time_seconds,
+        'dt': dt,
+        'time_min_lst': time_min_lst,
+        'time_max_lst': time_max_lst
+    }
 
 
 def get_station_id(ms):
