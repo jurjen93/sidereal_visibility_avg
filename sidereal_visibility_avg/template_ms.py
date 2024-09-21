@@ -214,6 +214,7 @@ class Template:
                     # Convert TIME to LST
                     print('hier2')
                     time = mjd_seconds_to_lst_seconds(t.getcol("TIME")) + time_lst_offset
+                    print('hier2.1')
                     uniq_time = np.unique(time)
                     print('hier2.2')
                     time_idxs = find_closest_index_list(uniq_time, ref_uniq_time)
