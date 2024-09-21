@@ -96,14 +96,19 @@ def find_closest_index_list(a1, a2):
     Find the indices of the closest values between two arrays using KDTree.
 
     :param:
-        - a1: first array
-        - a2: second array
+        - a1: first array (values to search for closest match)
+        - a2: second array (values to build the KDTree from)
 
     :return:
         - The indices of the closest value in the array.
     """
-    a2_tree = cKDTree(np.array(a2)[:, None])  # Build a KDTree for a2
-    distances, indices = a2_tree.query(np.array(a1)[:, None], k=1)  # Query for nearest neighbors
+
+    # Use float32 for more efficient memory usage and speed
+    a2_tree = cKDTree(np.array(a2, dtype=np.float32)[:, None])  # Build a KDTree for a2
+
+    # Convert a1 to float32 for consistency and optimized computation
+    distances, indices = a2_tree.query(np.array(a1, dtype=np.float32)[:, None], k=1)  # Query nearest neighbors
+
     return indices
 
 
