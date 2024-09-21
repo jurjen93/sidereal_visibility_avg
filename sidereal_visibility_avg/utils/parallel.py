@@ -74,35 +74,30 @@ def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
 
     return mapping_batch
 
-def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder, io_batch_size=5):
+def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder):
     """
     Parallel processing of mapping with unique antenna pairs using joblib.
-    Batch antenna pairs and write results in chunks to minimize I/O overhead.
+    Writes the mappings directly after each batch is processed.
     """
 
     # Determine optimal batch size
-    batch_size = max(len(uniq_ant_pairs) // 10, 1)
+    batch_size = max(len(uniq_ant_pairs) // (cpu_count() * 2), 1)  # Split tasks across all cores
 
-    results = Parallel(n_jobs=max(cpu_count() - 3, 1), backend="loky")(
+    # Use joblib's Parallel with delayed for process-based parallelism
+    # Maximize CPU core utilization
+    n_jobs = max(cpu_count()-3, 1)  # Use all available CPU cores
+    results = Parallel(n_jobs=n_jobs, backend="loky")(
         delayed(process_antpair_batch)(uniq_ant_pairs[i:i + batch_size], antennas, ref_antennas, time_idxs)
         for i in range(0, len(uniq_ant_pairs), batch_size)
     )
 
-    # Write the JSON mappings in batches to minimize I/O overhead
-    for batch_idx in range(0, len(results), io_batch_size):
-        try:
-            batch_results = results[batch_idx:batch_idx + io_batch_size]
-            mappings_to_write = {}
-
-            # Collect all mappings in this I/O batch
-            for mapping_batch in batch_results:
-                mappings_to_write.update(mapping_batch)
-
-            # Write to disk in a single batch
-            for antpair, mapping in mappings_to_write.items():
+    # Write the JSON mappings immediately after processing each batch
+    try:
+        for mapping_batch in results:
+            for antpair, mapping in mapping_batch.items():
                 file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
                 with open(file_path, 'w') as f:
                     json.dump(mapping, f)
 
-        except Exception as e:
-            print(f"An error occurred while writing the mappings: {e}")
+    except Exception as e:
+        print(f"An error occurred while writing the mappings: {e}")

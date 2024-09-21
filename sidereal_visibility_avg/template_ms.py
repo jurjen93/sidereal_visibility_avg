@@ -207,20 +207,24 @@ class Template:
                     makedirs(mapping_folder, exist_ok=False)
 
                     # Fetch MS info and map antenna IDs
+                    print('hier')
                     new_stats, new_ids = get_station_id(ms)
                     id_map = {new_id: ref_stats.index(stat) for new_id, stat in zip(new_ids, new_stats)}
 
                     # Convert TIME to LST
+                    print('hier2')
                     time = mjd_seconds_to_lst_seconds(t.getcol("TIME")) + time_lst_offset
                     uniq_time = np.unique(time)
                     time_idxs = find_closest_index_list(uniq_time, ref_uniq_time)
 
                     # Map antennas and compute unique pairs
+                    print('hier3')
                     antennas = np.c_[
                         map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)]
                     uniq_ant_pairs = np.unique(antennas, axis=0)
 
                     # Run parallel mapping
+                    print('hier4')
                     run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder)
                 else:
                     print(f'{mapping_folder} already exists')
