@@ -5,7 +5,7 @@ from os import system as run_command
 from shutil import rmtree
 from pprint import pprint
 import json
-from concurrent.futures import ProcessPoolExecutor, as_completed, ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from glob import glob
 from .utils.dysco import decompress
 from .utils.helpers import (print_progress_bar, repeat_elements, map_array_dict, find_closest_index_multi_array,
@@ -208,22 +208,26 @@ class Template:
 
         def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder):
             """
-            Parallel processing of mapping with unique antenna pairs.
+            Parallel processing of mapping with unique antenna pairs using ProcessPoolExecutor.
             Batch antenna pairs to minimize overhead.
             """
 
-            batch_size = len(uniq_ant_pairs)//100
-            with ThreadPoolExecutor(max_workers=max(cpu_count() - 3, 1)) as executor:
+            # Determine the batch size, and adjust it based on the size of unique antenna pairs
+            batch_size = max(len(uniq_ant_pairs) // 100, 1)
+
+            with ProcessPoolExecutor(max_workers=max(cpu_count() - 3, 1)) as executor:
                 futures = []
+
+                # Submit the tasks in batches
                 for i in range(0, len(uniq_ant_pairs), batch_size):
                     antpair_batch = uniq_ant_pairs[i:i + batch_size]
                     futures.append(
                         executor.submit(process_antpair_batch, antpair_batch, antennas, ref_antennas, time_idxs))
 
-                # Collect results and write mappings
+                # Collect the results and write mappings
                 for future in as_completed(futures):
                     try:
-                        mapping_batch = future.result()  # Batch of mappings
+                        mapping_batch = future.result()  # Get the batch of mappings
                         for antpair, mapping in mapping_batch.items():
                             file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
                             with open(file_path, 'w') as f:
@@ -345,7 +349,7 @@ class Template:
 
         print("Multithreading...")
 
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
             future_to_baseline = {
                 executor.submit(process_baselines, range(i, min(i + batch_size, len(baselines))), baselines,
                                 self.mslist): i
@@ -415,16 +419,18 @@ class Template:
         num_workers = min(cpu_count()-5, len(baselines))
 
         print('\nMake new mapping based on UVW points')
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            future_to_baseline = {executor.submit(process_baseline, baseline, self.mslist, UVW): baseline for baseline in
-                                  baselines}
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            future_to_baseline = {executor.submit(process_baseline, baseline, self.mslist, UVW): baseline for baseline
+                                  in baselines}
+
             for n, future in enumerate(as_completed(future_to_baseline)):
                 baseline = future_to_baseline[future]
                 try:
-                    future.result()
+                    future.result()  # Get the result, which will also raise exceptions if any occurred
                 except Exception as exc:
                     print(f'Baseline {baseline} generated an exception: {exc}')
-                print_progress_bar(n + 1, len(baselines))
+
+                print_progress_bar(n + 1, len(baselines))  # Progress bar updates after each baseline completes
 
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1):
         """
