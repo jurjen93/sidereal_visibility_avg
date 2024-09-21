@@ -1,6 +1,6 @@
 from casacore.tables import table
 import numpy as np
-from .lst import mjd_seconds_to_lst_seconds
+from .lst import mjd_seconds_to_lst_seconds_single
 from sys import exit
 
 
@@ -67,7 +67,7 @@ def get_ms_content(ms):
             dt = 0
 
         # Convert time to LST in one call
-        time_lst = mjd_seconds_to_lst_seconds(time)
+        time_lst = mjd_seconds_to_lst_seconds_single(time)
         time_min_lst, time_max_lst = time_lst.min(), time_lst.max()
 
     # Print output (could be skipped for speed)

@@ -16,7 +16,7 @@ from .utils.files import check_folder_exists
 from .utils.ms_info import (get_ms_content, get_station_id, same_phasedir, unique_station_list, n_baselines,
                            make_ant_pairs)
 from .utils.uvw import resample_uwv
-from .utils.lst import mjd_seconds_to_lst_seconds
+from .utils.lst import mjd_seconds_to_lst_seconds, mjd_seconds_to_lst_seconds_single
 
 
 def process_ms(ms):
@@ -44,7 +44,7 @@ class Template:
             for ms in self.mslist:
                 with table(f"{ms}::OBSERVATION", ack=False) as t:
                     tr = t.getcol("TIME_RANGE")[0][0]
-                    lst_tr = mjd_seconds_to_lst_seconds(t.getcol("TIME_RANGE")[0][0])
+                    lst_tr = mjd_seconds_to_lst_seconds_single(t.getcol("TIME_RANGE")[0][0])
                     lst_offset = tr - lst_tr
                     times.append(lst_offset)
             self._time_lst_offset = np.median(times)
