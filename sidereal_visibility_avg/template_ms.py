@@ -300,7 +300,9 @@ class Template:
 
         if not path.exists('UVW.tmp.dat'):
             with table(self.outname, readonly=False, ack=False) as T:
-                np.memmap('UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
+                UVW = np.memmap('UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
+                with table(self.outname, ack=False) as T:
+                    UVW[:] = T.getcol("UVW")
 
                 for ms_idx, ms in enumerate(sorted(self.mslist)):
                     with table(ms, ack=False) as f:
