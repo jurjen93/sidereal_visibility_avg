@@ -306,7 +306,8 @@ class Template:
 
                 for ms_idx, ms in enumerate(sorted(self.mslist)):
                     with table(ms, ack=False) as f:
-                        np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                        uvw = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                        uvw[:] = f.getcol("UVW")
 
         else:
             UVW = np.memmap('UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
