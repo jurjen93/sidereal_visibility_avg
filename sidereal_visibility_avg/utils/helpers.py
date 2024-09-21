@@ -3,6 +3,7 @@ import numpy as np
 from casacore.tables import table
 from scipy.spatial import cKDTree
 from math import ceil
+from sklearn.neighbors import NearestNeighbors
 
 
 def print_progress_bar(index, total, bar_length=50):
@@ -93,23 +94,18 @@ def find_closest_index(arr, value):
 
 def find_closest_index_list(a1, a2):
     """
-    Find the indices of the closest values between two arrays using KDTree.
-
-    :param:
-        - a1: first array (values to search for closest match)
-        - a2: second array (values to build the KDTree from)
-
-    :return:
-        - The indices of the closest value in the array.
+    Find the indices of the closest values between two arrays using sklearn's NearestNeighbors.
+    Can be much faster with approximate nearest neighbors (ANN).
     """
+    a1, a2 = np.array(a1), np.array(a2)
 
-    # Use float32 for more efficient memory usage and speed
-    a2_tree = cKDTree(np.array(a2, dtype=np.float32)[:, None])  # Build a KDTree for a2
+    # Create a nearest neighbors model (use 'ball_tree' or 'kd_tree' for small, 'brute' for large datasets)
+    nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(a2.reshape(-1, 1))
 
-    # Convert a1 to float32 for consistency and optimized computation
-    distances, indices = a2_tree.query(np.array(a1, dtype=np.float32)[:, None], k=1)  # Query nearest neighbors
+    # Find the nearest neighbors for each element in a1
+    distances, indices = nbrs.kneighbors(a1.reshape(-1, 1))
 
-    return indices
+    return indices.flatten()
 
 
 def find_closest_index_multi_array(a1, a2):
@@ -124,6 +120,7 @@ def find_closest_index_multi_array(a1, a2):
     :return:
         - A list of indices corresponding to the nearest neighbors in a2 for each point in a1.
     """
+
     # Ensure inputs are numpy arrays
     a1 = np.asarray(a1)
     a2 = np.asarray(a2)
