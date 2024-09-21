@@ -112,10 +112,9 @@ def process_ms(ms):
     return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
 
 
-def process_baseline_uvw(baseline, mslist, UVW):
+def process_baseline_uvw(baseline, folder, UVW):
     """Parallel processing baseline"""
     try:
-        folder = '/'.join(mslist[0].split('/')[0:-1])
         if not folder:
             folder = '.'
         mapping_folder_baseline = sorted(

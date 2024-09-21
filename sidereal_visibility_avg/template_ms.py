@@ -296,19 +296,16 @@ class Template:
         """
 
         # Get baselines
-        ants = table(self.outname + "::ANTENNA", ack=False)
-        baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
-        ants.close()
+        with table(self.outname + "::ANTENNA", ack=False) as ants:
+            baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
 
         if not path.exists('UVW.tmp.dat'):
             with table(self.outname, readonly=False, ack=False) as T:
                 np.memmap('UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
-                np.memmap('TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
 
                 for ms_idx, ms in enumerate(sorted(self.mslist)):
                     with table(ms, ack=False) as f:
                         np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
-                        np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
 
         UVW = np.memmap('UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
 
@@ -316,7 +313,8 @@ class Template:
 
         print('\nMake new mapping based on UVW points')
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            future_to_baseline = {executor.submit(process_baseline_uvw, baseline, self.mslist, UVW): baseline for baseline
+            future_to_baseline = {executor.submit(process_baseline_uvw, baseline,
+                                                  '/'.join(self.mslist[0].split('/')[0:-1]), UVW): baseline for baseline
                                   in baselines}
 
             for n, future in enumerate(as_completed(future_to_baseline)):
