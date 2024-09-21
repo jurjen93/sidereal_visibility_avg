@@ -26,7 +26,6 @@ def parse_args():
     parser.add_argument('--time_res', type=float, help='Desired time resolution in seconds')
     parser.add_argument('--resolution', type=float, help='Desired spatial resolution (if given, you also have to give --fov_diam)')
     parser.add_argument('--fov_diam', type=float, help='Desired field of view diameter in degrees. This is used to calculate the optimal time resolution.')
-    parser.add_argument('--record_time', action='store_true', help='Record wall-time of stacking')
     parser.add_argument('--chunk_mem', type=float, default=1., help='Additional memory chunk parameter (larger for smaller chunks)')
     parser.add_argument('--no_dysco', action='store_true', help='No Dysco compression of data')
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template')
@@ -80,14 +79,12 @@ def main():
 
     # Stack MS
     if not args.make_only_template:
-        if args.record_time:
-            start_time = time.time()
+        start_time = time.time()
         s = Stack(args.msin, args.msout, chunkmem=args.chunk_mem)
         s.stack_all(avg_uvw=args.interpolate_uvw)
-        if args.record_time:
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            print(f"Elapsed time for stacking: {elapsed_time//60} minutes")
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"Elapsed time for stacking: {elapsed_time//60} minutes")
 
     if args.plot_uv_baseline_coverage:
         make_baseline_uvw_plots(args.msout, args.msin)

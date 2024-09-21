@@ -174,24 +174,14 @@ class Stack:
                     new_data /= uvw_weights
                     new_data[new_data != new_data] = 0.
 
-                for chunk_idx in range(self.T.nrows()//self.chunk_size+1):
-                    # print(new_data[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)])
-                    # print(chunk_idx, self.chunk_size, self.T.nrows())
-                    if self.T.nrows() < self.chunk_size:
-                        print(chunk_idx, self.chunk_size, self.T.nrows())
-                        self.T.putcol(col, new_data[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)])
-                    else:
-                        self.T.putcol(col, new_data[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)],
-                                      startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
+                    start = chunk_idx * self.chunk_size
+                    end = min(start + self.chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
+                    self.T.putcol(col, new_data[start:end], startrow=start, nrow=end - start)
 
-        # print(taql("SELECT DATA FROM empty.ms | echo"))
-        # if self.flag:
-        #     # ADD FLAG
+        # ADD FLAG
         print(f'Put column FLAG')
         taql(f'UPDATE {self.outname} SET FLAG = (WEIGHT_SPECTRUM == 0)')
-        # else: TODO: FIX FLAGGING
-        #     # REMOVE FLAGS
-        #     remove_flagged_entries(self.outname)
 
         # NORM DATA
         print(f'Normalise column DATA')
