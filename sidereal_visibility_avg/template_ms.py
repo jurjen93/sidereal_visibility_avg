@@ -171,7 +171,7 @@ class Template:
         tnew_station.addrows(len(lofar_names))
         tnew_station.putcol("NAME", lofar_names)
         tnew_station.putcol("FLAG_ROW", np.array([False] * len(lofar_names)))
-        tnew_station.putcol("CLOCK_ID", np.array(clock))
+        tnew_station.putcol("CLOCK_ID", np.array(clock, dtype=int))
         tnew_station.flush(True)
         tnew_station.close()
 
