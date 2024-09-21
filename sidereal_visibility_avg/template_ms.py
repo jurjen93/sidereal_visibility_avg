@@ -41,7 +41,7 @@ class Template:
         if self._time_lst_offset is None:
             times = []
             for ms in self.mslist:
-                with table(f"{ms}::OBSERVATION") as t:
+                with table(f"{ms}::OBSERVATION", ack=False) as t:
                     tr = t.getcol("TIME_RANGE")[0][0]
                     lst_tr = mjd_seconds_to_lst_seconds(t.getcol("TIME_RANGE")[0][0])
                     lst_offset = tr - lst_tr
@@ -180,45 +180,57 @@ class Template:
         Make mapping json files essential for efficient stacking.
         These map LST times from input MS to template MS.
         """
+        outname = self.outname  # Cache instance variables locally
+        time_lst_offset = self.time_lst_offset
 
         # Open MS table and fetch columns once
-        with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(self.outname)} ORDER BY TIME") as T:
+        with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(outname)} ORDER BY TIME") as T:
             ref_time = T.getcol("TIME")
-            ref_antennas = np.sort(np.c_[T.getcol("ANTENNA1"), T.getcol("ANTENNA2")])
+            ref_antennas = np.c_[T.getcol("ANTENNA1"), T.getcol("ANTENNA2")]
 
         # Precompute unique times and antenna pairs once
         ref_uniq_time = np.unique(ref_time)
 
-        def process_antpair(antpair, antennas, ref_antennas, time_idxs):
+        def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
             """
-            Process a single antenna pair, creating a JSON mapping.
+            Process a batch of antenna pairs, creating JSON mappings.
             """
-            # Get index mappings for the antenna pair
-            pair_idx = squeeze_to_intlist(np.argwhere(np.all(antennas == antpair, axis=1)))
-            ref_pair_idx = squeeze_to_intlist(np.argwhere(np.all(ref_antennas == antpair, axis=1))[time_idxs])
+            mapping_batch = {}
+            for antpair in antpair_batch:
+                pair_idx = squeeze_to_intlist(np.argwhere(np.all(antennas == antpair, axis=1)))
+                ref_pair_idx = squeeze_to_intlist(np.argwhere(np.all(ref_antennas == antpair, axis=1))[time_idxs])
 
-            # Create the mapping dictionary
-            mapping = {int(pair_idx[i]): int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
+                # Create the mapping dictionary for each pair
+                mapping = {int(pair_idx[i]): int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
+                mapping_batch[tuple(antpair)] = mapping  # Store in batch
 
-            # Write to JSON file
-            file_path = path.join(mapping_folder, '-'.join(antpair.astype(str)) + '.json')
-            with open(file_path, 'w') as f:
-                json.dump(mapping, f)
+            return mapping_batch
 
-        def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs):
+        def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder):
             """
             Parallel processing of mapping with unique antenna pairs.
+            Batch antenna pairs to minimize overhead.
             """
+            batch_size = 100  # Tune this based on performance (larger batch size reduces I/O and task overhead)
             with ThreadPoolExecutor(max_workers=max(cpu_count() - 3, 1)) as executor:
-                futures = [executor.submit(process_antpair, antpair, antennas, ref_antennas, time_idxs) for antpair in
-                           uniq_ant_pairs]
+                futures = []
+                for i in range(0, len(uniq_ant_pairs), batch_size):
+                    antpair_batch = uniq_ant_pairs[i:i + batch_size]
+                    futures.append(
+                        executor.submit(process_antpair_batch, antpair_batch, antennas, ref_antennas, time_idxs))
+
+                # Collect results and write mappings
                 for future in as_completed(futures):
                     try:
-                        future.result()  # This will raise exceptions if any occurred during the execution
+                        mapping_batch = future.result()  # Batch of mappings
+                        for antpair, mapping in mapping_batch.items():
+                            file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
+                            with open(file_path, 'w') as f:
+                                json.dump(mapping, f)
                     except Exception as e:
                         print(f"An error occurred: {e}")
 
-        ref_stats, ref_ids = get_station_id(self.outname)
+        ref_stats, ref_ids = get_station_id(outname)
 
         # Process each MS file in parallel
         for ms in self.mslist:
@@ -226,7 +238,6 @@ class Template:
 
             # Open the MS table and read columns
             with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(ms)} ORDER BY TIME") as t:
-                # antennas = np.sort(np.c_[t.getcol("ANTENNA1"), t.getcol("ANTENNA2")])
 
                 # Mapping folder for the current MS
                 mapping_folder = ms + '_baseline_mapping'
@@ -239,18 +250,17 @@ class Template:
                     id_map = {new_id: ref_stats.index(stat) for new_id, stat in zip(new_ids, new_stats)}
 
                     # Convert TIME to LST
-                    time = mjd_seconds_to_lst_seconds(t.getcol("TIME")) + self.time_lst_offset
+                    time = mjd_seconds_to_lst_seconds(t.getcol("TIME")) + time_lst_offset
                     uniq_time = np.unique(time)
                     time_idxs = find_closest_index_list(uniq_time, ref_uniq_time)
 
                     # Map antennas and compute unique pairs
-                    antennas = np.sort(
-                        np.c_[map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)],
-                        axis=1)
+                    antennas = np.c_[
+                        map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)]
                     uniq_ant_pairs = np.unique(antennas, axis=0)
 
                     # Run parallel mapping
-                    run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs)
+                    run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder)
                 else:
                     print(f'{mapping_folder} already exists')
 
