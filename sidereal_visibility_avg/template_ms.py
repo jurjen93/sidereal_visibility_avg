@@ -308,7 +308,8 @@ class Template:
                     with table(ms, ack=False) as f:
                         np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
 
-        UVW = np.memmap('UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
+        else:
+            UVW = np.memmap('UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
 
         num_workers = min(cpu_count()-3, len(baselines))
 
