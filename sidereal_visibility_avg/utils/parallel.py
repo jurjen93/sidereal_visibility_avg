@@ -2,7 +2,7 @@ import numpy as np
 from joblib import Parallel, delayed
 import tempfile
 import json
-from os import path, makedirs, cpu_count
+from os import path, cpu_count
 from .helpers import squeeze_to_intlist
 
 

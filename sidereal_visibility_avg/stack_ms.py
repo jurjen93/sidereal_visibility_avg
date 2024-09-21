@@ -2,12 +2,11 @@ from casacore.tables import table, taql
 import numpy as np
 from os import path
 import sys
-from concurrent.futures import ThreadPoolExecutor
 import psutil
 from glob import glob
 from scipy.ndimage import gaussian_filter1d
 from .utils.helpers import print_progress_bar, find_closest_index_list
-from .utils.files import load_json
+from .utils.files import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
 from .utils.parallel import sum_arrays_chunkwise
 
@@ -71,28 +70,6 @@ class Stack:
         :param:
             - column: column name (currently only DATA)
         """
-
-        def read_mapping(mapping_folder):
-            """
-            Read mapping with multi-threads
-            """
-            # Get the list of JSON files
-            json_files = glob(path.join(mapping_folder, "*.json"))
-
-            # Load JSON files in parallel
-            total_map = {}
-            with ThreadPoolExecutor() as executor:
-                for result in executor.map(load_json, json_files):
-                    total_map.update(result)
-
-            # Convert keys and values to integers and sort
-            total_map = {int(k): int(v) for k, v in total_map.items()}
-            sorted_total_map = dict(sorted(total_map.items()))
-
-            indices = list(sorted_total_map.keys())
-            ref_indices = list(sorted_total_map.values())
-
-            return indices, ref_indices
 
         if column == 'DATA':
             if avg_uvw:
