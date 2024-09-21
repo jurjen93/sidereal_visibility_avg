@@ -26,6 +26,29 @@ def process_ms(ms):
     return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
 
 
+def process_baseline(baseline, mslist, UVW):
+    """Parallel processing baseline"""
+    try:
+        folder = '/'.join(mslist[0].split('/')[0:-1])
+        if not folder:
+            folder = '.'
+        mapping_folder_baseline = sorted(
+            glob(folder + '/*_mapping/' + '-'.join([str(a) for a in baseline]) + '.json'))
+        idxs_ref = np.unique(
+            [idx for mapp in mapping_folder_baseline for idx in json.load(open(mapp)).values()])
+        uvw_ref = UVW[list(idxs_ref)]
+        for mapp in mapping_folder_baseline:
+            idxs = [int(i) for i in json.load(open(mapp)).keys()]
+            ms = glob('/'.join(mapp.split('/')[0:-1]).replace("_baseline_mapping", ""))[0]
+            uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
+            idxs_new = [int(i) for i in np.array(idxs_ref)[
+                list(find_closest_index_multi_array(uvw_in[:, 0:2], uvw_ref[:, 0:2]))]]
+            with open(mapp, 'w+') as f:
+                json.dump(dict(zip(idxs, idxs_new)), f)
+    except Exception as exc:
+        print(f'Baseline {baseline} generated an exception: {exc}')
+
+
 class Template:
     """Make template measurement set based on input measurement sets"""
     def __init__(self, msin: list = None, outname: str = 'empty.ms'):
@@ -207,26 +230,20 @@ class Template:
                     makedirs(mapping_folder, exist_ok=False)
 
                     # Fetch MS info and map antenna IDs
-                    print('hier')
                     new_stats, new_ids = get_station_id(ms)
                     id_map = {new_id: ref_stats.index(stat) for new_id, stat in zip(new_ids, new_stats)}
 
                     # Convert TIME to LST
-                    print('hier2')
                     time = mjd_seconds_to_lst_seconds(t.getcol("TIME")) + time_lst_offset
-                    print('hier2.1')
                     uniq_time = np.unique(time)
-                    print('hier2.2')
                     time_idxs = find_closest_index_list(uniq_time, ref_uniq_time)
 
                     # Map antennas and compute unique pairs
-                    print('hier3')
                     antennas = np.c_[
                         map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)]
                     uniq_ant_pairs = np.unique(antennas, axis=0)
 
                     # Run parallel mapping
-                    print('hier4')
                     run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder)
                 else:
                     print(f'{mapping_folder} already exists')
@@ -338,28 +355,6 @@ class Template:
         """
         Make mapping json files essential for efficient stacking based on UVW points
         """
-
-        def process_baseline(baseline, mslist, UVW):
-            """Parallel processing baseline"""
-            try:
-                folder = '/'.join(mslist[0].split('/')[0:-1])
-                if not folder:
-                    folder = '.'
-                mapping_folder_baseline = sorted(
-                    glob(folder + '/*_mapping/' + '-'.join([str(a) for a in baseline]) + '.json'))
-                idxs_ref = np.unique(
-                    [idx for mapp in mapping_folder_baseline for idx in json.load(open(mapp)).values()])
-                uvw_ref = UVW[list(idxs_ref)]
-                for mapp in mapping_folder_baseline:
-                    idxs = [int(i) for i in json.load(open(mapp)).keys()]
-                    ms = glob('/'.join(mapp.split('/')[0:-1]).replace("_baseline_mapping", ""))[0]
-                    uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
-                    idxs_new = [int(i) for i in np.array(idxs_ref)[
-                        list(find_closest_index_multi_array(uvw_in[:, 0:2], uvw_ref[:, 0:2]))]]
-                    with open(mapp, 'w+') as f:
-                        json.dump(dict(zip(idxs, idxs_new)), f)
-            except Exception as exc:
-                print(f'Baseline {baseline} generated an exception: {exc}')
 
         # Get baselines
         ants = table(self.outname + "::ANTENNA", ack=False)
