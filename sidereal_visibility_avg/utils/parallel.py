@@ -7,6 +7,8 @@ from .helpers import squeeze_to_intlist
 from glob import glob
 from .helpers import find_closest_index_multi_array
 from .ms_info import get_ms_content
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from multiprocessing import cpu_count
 
 
 def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
@@ -61,15 +63,31 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=T
 
     return result_array
 
+
 def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
     """
     Process a batch of antenna pairs, creating JSON mappings.
     """
 
     mapping_batch = {}
+
     for antpair in antpair_batch:
-        pair_idx = squeeze_to_intlist(np.argwhere(np.all(antennas == antpair, axis=1)))
-        ref_pair_idx = squeeze_to_intlist(np.argwhere(np.all(ref_antennas == antpair, axis=1))[time_idxs])
+        # Get indices for the antenna pair
+        pair_idx = np.squeeze(np.argwhere(np.all(antennas == antpair, axis=1)))
+        ref_pair_idx = np.squeeze(np.argwhere(np.all(ref_antennas == antpair, axis=1)))
+
+        # Ensure indices are valid
+        if pair_idx.size == 0 or ref_pair_idx.size == 0:
+            print(f"No matching indices found for antenna pair: {antpair}")
+            continue  # Skip this antenna pair if no valid indices are found
+
+        # Ensure `time_idxs` are within the bounds of `ref_pair_idx`
+        valid_time_idxs = time_idxs[time_idxs < len(ref_pair_idx)]
+        if len(valid_time_idxs) == 0:
+            print(f"No valid time indices for antenna pair: {antpair}")
+            continue
+
+        ref_pair_idx = ref_pair_idx[valid_time_idxs]
 
         # Create the mapping dictionary for each pair
         mapping = {int(pair_idx[i]): int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
@@ -77,32 +95,44 @@ def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
 
     return mapping_batch
 
+
 def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder):
     """
-    Parallel processing of mapping with unique antenna pairs using joblib.
+    Parallel processing of mapping with unique antenna pairs using ProcessPoolExecutor.
     Writes the mappings directly after each batch is processed.
     """
 
     # Determine optimal batch size
     batch_size = max(len(uniq_ant_pairs) // (cpu_count() * 2), 1)  # Split tasks across all cores
 
-    # Use joblib's Parallel with delayed for process-based parallelism
-    n_jobs = max(cpu_count()-3, 1)  # Use all available CPU cores
-    results = Parallel(n_jobs=n_jobs, backend="loky")(
-        delayed(process_antpair_batch)(uniq_ant_pairs[i:i + batch_size], antennas, ref_antennas, time_idxs)
-        for i in range(0, len(uniq_ant_pairs), batch_size)
-    )
+    # Use all available CPU cores minus a few for overhead
+    n_jobs = max(cpu_count() - 3, 1)
 
-    # Write the JSON mappings after processing each batch
-    try:
-        for mapping_batch in results:
-            for antpair, mapping in mapping_batch.items():
-                file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
-                with open(file_path, 'w') as f:
-                    json.dump(mapping, f)
+    print(f"Starting parallel processing with {n_jobs} jobs...")
+    print(f"Total unique antenna pairs: {len(uniq_ant_pairs)}, Batch size: {batch_size}")
 
-    except Exception as e:
-        print(f"An error occurred while writing the mappings: {e}")
+    def process_batch(batch):
+        """Helper function to process a single batch"""
+        return process_antpair_batch(batch, antennas, ref_antennas, time_idxs)
+
+    # Process in parallel using ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+        futures = [executor.submit(process_batch, uniq_ant_pairs[i:i + batch_size])
+                   for i in range(0, len(uniq_ant_pairs), batch_size) if uniq_ant_pairs[i:i + batch_size]]
+
+        try:
+            for future in as_completed(futures):
+                mapping_batch = future.result()  # Get the result from each completed future
+                for antpair, mapping in mapping_batch.items():
+                    file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
+                    with open(file_path, 'w') as f:
+                        json.dump(mapping, f)
+                    print(f"Successfully wrote mapping for antenna pair: {antpair}")
+
+        except Exception as e:
+            print(f"An error occurred during parallel processing: {e}")
+
+    print("Parallel mapping processing and writing completed successfully.")
 
 
 def process_ms(ms):
