@@ -105,10 +105,6 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
     # Determine optimal batch size
     batch_size = max(len(uniq_ant_pairs) // (cpu_count() * 2), 1)  # Split tasks across all cores
 
-    def process_antpair_batch_wrapper(ant_pairs_batch):
-        """Wrapper function to pass to ProcessPoolExecutor."""
-        return process_antpair_batch(ant_pairs_batch, antennas, ref_antennas, time_idxs)
-
     # Use ProcessPoolExecutor for process-based parallelism
     n_jobs = max(cpu_count() - 3, 1)  # Use all available CPU cores
 
@@ -116,7 +112,7 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
         with ProcessPoolExecutor(max_workers=n_jobs) as executor:
             # Submit batches of antenna pairs for parallel processing
             futures = [
-                executor.submit(process_antpair_batch_wrapper, uniq_ant_pairs[i:i + batch_size])
+                executor.submit(process_antpair_batch, uniq_ant_pairs[i:i + batch_size], antennas, ref_antennas, time_idxs)
                 for i in range(0, len(uniq_ant_pairs), batch_size)
             ]
 
