@@ -105,34 +105,31 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
     # Determine optimal batch size
     batch_size = max(len(uniq_ant_pairs) // (cpu_count() * 2), 1)  # Split tasks across all cores
 
-    # Use all available CPU cores minus a few for overhead
-    n_jobs = max(cpu_count() - 3, 1)
+    def process_antpair_batch_wrapper(ant_pairs_batch):
+        """Wrapper function to pass to ProcessPoolExecutor."""
+        return process_antpair_batch(ant_pairs_batch, antennas, ref_antennas, time_idxs)
 
-    print(f"Starting parallel processing with {n_jobs} jobs...")
-    print(f"Total unique antenna pairs: {len(uniq_ant_pairs)}, Batch size: {batch_size}")
+    # Use ProcessPoolExecutor for process-based parallelism
+    n_jobs = max(cpu_count() - 3, 1)  # Use all available CPU cores
 
-    def process_batch(batch):
-        """Helper function to process a single batch"""
-        return process_antpair_batch(batch, antennas, ref_antennas, time_idxs)
+    try:
+        with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+            # Submit batches of antenna pairs for parallel processing
+            futures = [
+                executor.submit(process_antpair_batch_wrapper, uniq_ant_pairs[i:i + batch_size])
+                for i in range(0, len(uniq_ant_pairs), batch_size)
+            ]
 
-    # Process in parallel using ProcessPoolExecutor
-    with ProcessPoolExecutor(max_workers=n_jobs) as executor:
-        futures = [executor.submit(process_batch, uniq_ant_pairs[i:i + batch_size])
-                   for i in range(0, len(uniq_ant_pairs), batch_size) if uniq_ant_pairs[i:i + batch_size]]
-
-        try:
             for future in as_completed(futures):
-                mapping_batch = future.result()  # Get the result from each completed future
+                mapping_batch = future.result()
+                # Write the JSON mappings after processing each batch
                 for antpair, mapping in mapping_batch.items():
                     file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
                     with open(file_path, 'w') as f:
                         json.dump(mapping, f)
-                    print(f"Successfully wrote mapping for antenna pair: {antpair}")
 
-        except Exception as e:
-            print(f"An error occurred during parallel processing: {e}")
-
-    print("Parallel mapping processing and writing completed successfully.")
+    except Exception as e:
+        print(f"An error occurred while writing the mappings: {e}")
 
 
 def process_ms(ms):
