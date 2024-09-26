@@ -27,12 +27,12 @@ def parse_args():
     parser.add_argument('--resolution', type=float, help='Desired spatial resolution (if given, you also have to give --fov_diam)')
     parser.add_argument('--fov_diam', type=float, help='Desired field of view diameter in degrees. This is used to calculate the optimal time resolution.')
     parser.add_argument('--chunk_mem', type=float, default=1., help='Additional memory chunk parameter (larger for smaller chunks)')
-    parser.add_argument('--no_dysco', action='store_true', help='No Dysco compression of data')
+    parser.add_argument('--dysco', action='store_true', help='Dysco compression of data')
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files')
-    parser.add_argument('--plot_uv_baseline_coverage', action='store_true', help='make plots with baseline versus UV')
     parser.add_argument('--interpolate_uvw', action='store_true', help='Interpolate UVW with nearest neighbours')
     parser.add_argument('--overwrite', action='store_true', help='Overwrite output')
+    # parser.add_argument('--plot_uv_baseline_coverage', action='store_true', help='make UV plots of baselines')
 
     return parser.parse_args()
 
@@ -86,8 +86,8 @@ def main():
         elapsed_time = end_time - start_time
         print(f"Elapsed time for stacking: {elapsed_time//60} minutes")
 
-    if args.plot_uv_baseline_coverage:
-        make_baseline_uvw_plots(args.msout, args.msin)
+    # if args.plot_uv_baseline_coverage:
+    #     make_baseline_uvw_plots(args.msout, args.msin)
 
     # Clean up mapping files
     if not args.keep_mapping:
@@ -95,7 +95,7 @@ def main():
     clean_binary_files()
 
     # Apply dysco compression
-    if not args.no_dysco:
+    if args.dysco:
         compress(args.msout)
 
 
