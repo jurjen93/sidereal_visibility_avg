@@ -29,10 +29,8 @@ def parse_args():
     parser.add_argument('--chunk_mem', type=float, default=1., help='Additional memory chunk parameter (larger for smaller chunks)')
     parser.add_argument('--dysco', action='store_true', help='Dysco compression of data')
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template')
-    parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files')
     parser.add_argument('--interpolate_uvw', action='store_true', help='Interpolate UVW with nearest neighbours')
-    parser.add_argument('--overwrite', action='store_true', help='Overwrite output')
-    # parser.add_argument('--plot_uv_baseline_coverage', action='store_true', help='make UV plots of baselines')
+    parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (for debugging)')
 
     return parser.parse_args()
 
@@ -49,10 +47,7 @@ def main():
 
     # Verify if output exists
     if check_folder_exists(args.msout):
-        if args.overwrite:
-            run_command(f'rm -rf {args.msout} && sleep 3')
-        else:
-            sys.exit(f"ERROR: {args.msout} already exists! Delete file first if you want to overwrite.")
+        sys.exit(f"ERROR: {args.msout} already exists! Delete file first if you want to overwrite.")
 
     avg = 1
     if args.time_res is not None:
@@ -85,9 +80,6 @@ def main():
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Elapsed time for stacking: {elapsed_time//60} minutes")
-
-    # if args.plot_uv_baseline_coverage:
-    #     make_baseline_uvw_plots(args.msout, args.msin)
 
     # Clean up mapping files
     if not args.keep_mapping:
