@@ -12,10 +12,8 @@ def is_dysco_compressed(ms):
         - ms: measurement set
     """
 
-    t = table(ms, readonly=True, ack=False)
-    dysco = t.getdesc()["DATA"]['dataManagerGroup'] == 'DyscoData'
-    t.close()
-    return dysco
+    with table(ms, readonly=True, ack=False) as t:
+        return t.getdesc()["DATA"]['dataManagerGroup'] == 'DyscoData'
 
 
 def decompress(ms):

@@ -2,6 +2,7 @@ from casacore.tables import table, default_ms, taql
 import numpy as np
 from os import path, makedirs, cpu_count
 from os import system as run_command
+import sys
 from shutil import rmtree
 from pprint import pprint
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -13,6 +14,7 @@ from .utils.files import check_folder_exists
 from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
 from .utils.uvw import resample_uwv
 from .utils.lst import mjd_seconds_to_lst_seconds, mjd_seconds_to_lst_seconds_single
+
 
 
 class Template:
@@ -39,6 +41,18 @@ class Template:
             self._time_lst_offset = np.median(times)
         return self._time_lst_offset
 
+    def get_element_offset(self, station):
+        """
+        Get element offsets from mslist
+        """
+        for ms in self.mslist:
+            with taql(f'SELECT ROWID() as row_id FROM {ms}::ANTENNA WHERE NAME="{station}"') as rows:
+                if len(rows) == 1:
+                    id = rows[0]['row_id']
+                    with taql(f'SELECT ELEMENT_OFFSET FROM {ms}::LOFAR_ANTENNA_FIELD WHERE ANTENNA_ID={id}') as el:
+                        return el.getcol("ELEMENT_OFFSET"), id, ms
+        sys.exit(f"ERROR: No {station} in {self.mslist}?")
+
     def add_spectral_window(self):
         """
         Add SPECTRAL_WINDOW as sub table
@@ -46,34 +60,33 @@ class Template:
 
         print("Add table ==> " + self.outname + "::SPECTRAL_WINDOW")
 
-        tnew_spw_tmp = table(self.ref_table.getkeyword('SPECTRAL_WINDOW'), ack=False)
-        newdesc = tnew_spw_tmp.getdesc()
+        with table(self.ref_table.getkeyword('SPECTRAL_WINDOW'), ack=False) as tnew_spw_tmp:
+            newdesc = tnew_spw_tmp.getdesc()
         for col in ['CHAN_WIDTH', 'CHAN_FREQ', 'RESOLUTION', 'EFFECTIVE_BW']:
             newdesc[col]['shape'] = np.array([self.channels.shape[-1]])
 
-        tnew_spw = table(self.outname + '::SPECTRAL_WINDOW', newdesc, readonly=False, ack=False)
-        tnew_spw.addrows(1)
-        chanwidth = np.expand_dims([np.squeeze(np.diff(self.channels))[0]]*self.chan_num, 0)
-        tnew_spw.putcol("NUM_CHAN", np.array([self.chan_num]))
-        tnew_spw.putcol("CHAN_FREQ", self.channels)
-        tnew_spw.putcol("CHAN_WIDTH", chanwidth)
-        tnew_spw.putcol("RESOLUTION", chanwidth)
-        tnew_spw.putcol("EFFECTIVE_BW", chanwidth)
-        tnew_spw.putcol("REF_FREQUENCY", np.nanmean(self.channels))
-        tnew_spw.putcol("MEAS_FREQ_REF", np.array([5]))  # Why always 5?
-        tnew_spw.putcol("TOTAL_BANDWIDTH", [np.max(self.channels)-np.min(self.channels)-chanwidth[0][0]])
-        tnew_spw.putcol("NAME", 'Stacked_MS_'+str(int(np.nanmean(self.channels)//1000000))+"MHz")
-        tnew_spw.flush(True)
-        tnew_spw.close()
-        tnew_spw_tmp.close()
+        with table(self.outname + '::SPECTRAL_WINDOW', newdesc, readonly=False, ack=False) as tnew_spw:
+            tnew_spw.addrows(1)
+            chanw = np.squeeze(np.diff(self.channels))
+            while chanw.size != 1: chanw = chanw[0]
+            chanwidth = np.expand_dims([chanw]*self.chan_num, 0)
+            tnew_spw.putcol("NUM_CHAN", np.array([self.chan_num]))
+            tnew_spw.putcol("CHAN_FREQ", self.channels)
+            tnew_spw.putcol("CHAN_WIDTH", chanwidth)
+            tnew_spw.putcol("RESOLUTION", chanwidth)
+            tnew_spw.putcol("EFFECTIVE_BW", chanwidth)
+            tnew_spw.putcol("REF_FREQUENCY", np.nanmean(self.channels))
+            tnew_spw.putcol("MEAS_FREQ_REF", np.array([5]))  # Why always 5?
+            tnew_spw.putcol("TOTAL_BANDWIDTH", [np.max(self.channels)-np.min(self.channels)-chanwidth[0][0]])
+            tnew_spw.putcol("NAME", 'Stacked_MS_'+str(int(np.nanmean(self.channels)//1000000))+"MHz")
+            tnew_spw.flush(True)
 
     def add_stations(self):
         """
         Add ANTENNA and FEED tables
         """
 
-        print("Add table ==> " + self.outname + "::ANTENNA")
-
+        # Extract information
         stations = [sp[0] for sp in self.station_info]
         st_id = dict(zip(set(
             [stat[0:8] for stat in stations]),
@@ -89,81 +102,67 @@ class Template:
         lofar_names = np.array([sp[0] for sp in self.lofar_stations_info])
         clock = np.array([sp[1] for sp in self.lofar_stations_info])
 
-        tnew_ant_tmp = table(self.ref_table.getkeyword('ANTENNA'), ack=False)
-        newdesc = tnew_ant_tmp.getdesc()
-        tnew_ant_tmp.close()
-
-        tnew_ant = table(self.outname + '::ANTENNA', newdesc, readonly=False, ack=False)
-        tnew_ant.addrows(len(stations))
-        print('Total number of output stations: ' + str(tnew_ant.nrows()))
-        tnew_ant.putcol("NAME", stations)
-        tnew_ant.putcol("TYPE", ['GROUND-BASED']*len(stations))
-        tnew_ant.putcol("POSITION", positions)
-        tnew_ant.putcol("DISH_DIAMETER", diameters)
-        tnew_ant.putcol("OFFSET", np.array([[0., 0., 0.]] * len(stations)))
-        tnew_ant.putcol("FLAG_ROW", np.array([False] * len(stations)))
-        tnew_ant.putcol("MOUNT", ['X-Y'] * len(stations))
-        tnew_ant.putcol("STATION", ['LOFAR'] * len(stations))
-        tnew_ant.putcol("LOFAR_STATION_ID", ids)
-        tnew_ant.putcol("LOFAR_PHASE_REFERENCE", phase_ref)
-        tnew_ant.flush(True)
-        tnew_ant.close()
-
         print("Add table ==> " + self.outname + "::FEED")
 
-        tnew_ant_tmp = table(self.ref_table.getkeyword('FEED'), ack=False)
-        newdesc = tnew_ant_tmp.getdesc()
-        tnew_ant_tmp.close()
+        with table(self.ref_table.getkeyword('FEED'), ack=False) as tnew_ant_tmp:
+            newdesc = tnew_ant_tmp.getdesc()
 
-        tnew_feed = table(self.outname + '::FEED', newdesc, readonly=False, ack=False)
-        tnew_feed.addrows(len(stations))
-        tnew_feed.putcol("POSITION", np.array([[0., 0., 0.]] * len(stations)))
-        tnew_feed.putcol("BEAM_OFFSET", np.array([[[0, 0], [0, 0]]] * len(stations)))
-        tnew_feed.putcol("POL_RESPONSE", np.array([[[1. + 0.j, 0. + 0.j], [0. + 0.j, 1. + 0.j]]] * len(stations)).astype(np.complex64))
-        tnew_feed.putcol("POLARIZATION_TYPE", {'shape': [len(stations), 2], 'array': ['X', 'Y'] * len(stations)})
-        tnew_feed.putcol("RECEPTOR_ANGLE", np.array([[-0.78539816, -0.78539816]] * len(stations)))
-        tnew_feed.putcol("ANTENNA_ID", np.array(range(len(stations))))
-        tnew_feed.putcol("BEAM_ID", np.array([-1] * len(stations)))
-        tnew_feed.putcol("INTERVAL", np.array([28799.9787008] * len(stations)))
-        tnew_feed.putcol("NUM_RECEPTORS", np.array([2] * len(stations)))
-        tnew_feed.putcol("SPECTRAL_WINDOW_ID", np.array([-1] * len(stations)))
-        tnew_feed.putcol("TIME", np.array([5.e9] * len(stations)))
-        tnew_feed.flush(True)
-        tnew_feed.close()
+        with table(self.outname + '::FEED', newdesc, readonly=False, ack=False) as tnew_feed:
+            tnew_feed.addrows(len(stations))
+            tnew_feed.putcol("POSITION", np.array([[0., 0., 0.]] * len(stations)))
+            tnew_feed.putcol("BEAM_OFFSET", np.array([[[0, 0], [0, 0]]] * len(stations)))
+            tnew_feed.putcol("POL_RESPONSE", np.array([[[1. + 0.j, 0. + 0.j], [0. + 0.j, 1. + 0.j]]] * len(stations)).astype(np.complex64))
+            tnew_feed.putcol("POLARIZATION_TYPE", {'shape': [len(stations), 2], 'array': ['X', 'Y'] * len(stations)})
+            tnew_feed.putcol("RECEPTOR_ANGLE", np.array([[-0.78539816, -0.78539816]] * len(stations)))
+            tnew_feed.putcol("ANTENNA_ID", np.array(range(len(stations))))
+            tnew_feed.putcol("BEAM_ID", np.array([-1] * len(stations)))
+            tnew_feed.putcol("INTERVAL", np.array([28799.9787008] * len(stations)))
+            tnew_feed.putcol("NUM_RECEPTORS", np.array([2] * len(stations)))
+            tnew_feed.putcol("SPECTRAL_WINDOW_ID", np.array([-1] * len(stations)))
+            tnew_feed.putcol("TIME", np.array([5.e9] * len(stations)))
+
+        print("Add table ==> " + self.outname + "::ANTENNA")
+
+        with table(self.ref_table.getkeyword('ANTENNA'), ack=False) as tnew_ant_tmp:
+            newdesc = tnew_ant_tmp.getdesc()
+
+        with table(self.outname + '::ANTENNA', newdesc, readonly=False, ack=False) as tnew_ant:
+            tnew_ant.addrows(len(stations))
+            print('Total number of output stations: ' + str(tnew_ant.nrows()))
+            tnew_ant.putcol("NAME", stations)
+            tnew_ant.putcol("TYPE", ['GROUND-BASED']*len(stations))
+            tnew_ant.putcol("POSITION", positions)
+            tnew_ant.putcol("DISH_DIAMETER", diameters)
+            tnew_ant.putcol("OFFSET", np.array([[0., 0., 0.]] * len(stations)))
+            tnew_ant.putcol("FLAG_ROW", np.array([False] * len(stations)))
+            tnew_ant.putcol("MOUNT", ['X-Y'] * len(stations))
+            tnew_ant.putcol("STATION", ['LOFAR'] * len(stations))
+            tnew_ant.putcol("LOFAR_STATION_ID", ids)
+            tnew_ant.putcol("LOFAR_PHASE_REFERENCE", phase_ref)
 
         print("Add table ==> " + self.outname + "::LOFAR_ANTENNA_FIELD")
 
-        tnew_ant_tmp = table(self.ref_table.getkeyword('LOFAR_ANTENNA_FIELD'), ack=False)
-        newdesc = tnew_ant_tmp.getdesc()
+        with table(self.ref_table.getkeyword('LOFAR_ANTENNA_FIELD'), ack=False) as tnew_ant_tmp:
+            newdesc = tnew_ant_tmp.getdesc()
 
-        tnew_ant_tmp.close()
+        with table(self.outname + '::LOFAR_ANTENNA_FIELD', newdesc, readonly=False, ack=False) as tnew_field:
+            for n, station in enumerate(stations):
+                _, ind, ms = self.get_element_offset(station)
 
-        tnew_field = table(self.outname + '::LOFAR_ANTENNA_FIELD', newdesc, readonly=False, ack=False)
-        tnew_field.addrows(len(stations))
-        tnew_field.putcol("ANTENNA_ID", np.array(range(len(stations))))
-        tnew_field.putcol("NAME", names)
-        tnew_field.putcol("COORDINATE_AXES", np.array(coor_axes))
-        tnew_field.putcol("TILE_ELEMENT_OFFSET", np.array(tile_element))
-        tnew_field.putcol("TILE_ROTATION", np.array([0]*len(stations)))
-        # tnew_field.putcol("ELEMENT_OFFSET", ???) TODO: fix for primary beam construction
-        # tnew_field.putcol("ELEMENT_RCU", ???) TODO: fix for primary beam construction
-        # tnew_field.putcol("ELEMENT_FLAG", ???) TODO: fix for primary beam construction
-        tnew_field.flush(True)
-        tnew_field.close()
+                # Using taql because the shapes for Dutch and International stations are not similar (cannot be opened in Python)
+                taql(f"INSERT INTO {self.outname}::LOFAR_ANTENNA_FIELD SELECT FROM {ms}::LOFAR_ANTENNA_FIELD b WHERE b.ANTENNA_ID={ind}")
+            tnew_field.putcol("ANTENNA_ID", np.array(range(len(stations))))
 
         print("Add table ==> " + self.outname + "::LOFAR_STATION")
 
-        tnew_ant_tmp = table(self.ref_table.getkeyword('LOFAR_STATION'), ack=False)
-        newdesc = tnew_ant_tmp.getdesc()
-        tnew_ant_tmp.close()
+        with table(self.ref_table.getkeyword('LOFAR_STATION'), ack=False) as tnew_ant_tmp:
+            newdesc = tnew_ant_tmp.getdesc()
 
-        tnew_station = table(self.outname + '::LOFAR_STATION', newdesc, readonly=False, ack=False)
-        tnew_station.addrows(len(lofar_names))
-        tnew_station.putcol("NAME", lofar_names)
-        tnew_station.putcol("FLAG_ROW", np.array([False] * len(lofar_names)))
-        tnew_station.putcol("CLOCK_ID", np.array(clock, dtype=int))
-        tnew_station.flush(True)
-        tnew_station.close()
+        with table(self.outname + '::LOFAR_STATION', newdesc, readonly=False, ack=False) as tnew_station:
+            tnew_station.addrows(len(lofar_names))
+            tnew_station.putcol("NAME", lofar_names)
+            tnew_station.putcol("FLAG_ROW", np.array([False] * len(lofar_names)))
+            tnew_station.putcol("CLOCK_ID", np.array(clock, dtype=int))
 
     def make_mapping_lst(self):
         """
@@ -239,52 +238,50 @@ class Template:
         self.make_mapping_lst()
 
         # Get baselines
-        ants = table(self.outname + "::ANTENNA", ack=False)
-        baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
-        ants.close()
+        with table(self.outname + "::ANTENNA", ack=False) as ants:
+            baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
 
-        T = table(self.outname, readonly=False, ack=False)
-        UVW = np.memmap('UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
-        TIME = np.memmap('TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
-        TIME[:] = T.getcol("TIME")
+        with table(self.outname, readonly=False, ack=False) as T:
+            UVW = np.memmap('UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
+            TIME = np.memmap('TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
+            TIME[:] = T.getcol("TIME")
 
-        for ms_idx, ms in enumerate(sorted(self.mslist)):
-            with table(ms, ack=False) as f:
-                uvw = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
-                time = np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
+            for ms_idx, ms in enumerate(sorted(self.mslist)):
+                with table(ms, ack=False) as f:
+                    uvw = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                    time = np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
 
-                uvw[:] = f.getcol("UVW")
-                time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
+                    uvw[:] = f.getcol("UVW")
+                    time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
 
-        # Determine number of workers
-        num_workers = max(cpu_count()-3, 1)  # I/O-bound heuristic
+            # Determine number of workers
+            num_workers = max(cpu_count()-3, 1)  # I/O-bound heuristic
 
-        print(f"Using {num_workers} workers for making UVW column and accurate baseline mapping."
-              f"\nThis is an expensive operation. So, be patient..")
+            print(f"Using {num_workers} workers for making UVW column and accurate baseline mapping."
+                  f"\nThis is an expensive operation. So, be patient..")
 
-        batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
+            batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
 
-        print("Multithreading...")
+            print("Multithreading...")
 
-        with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            future_to_baseline = {
-                executor.submit(process_baseline_int, range(i, min(i + batch_size, len(baselines))), baselines,
-                                self.mslist): i
-                for i in range(0, len(baselines), batch_size)
-            }
+            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                future_to_baseline = {
+                    executor.submit(process_baseline_int, range(i, min(i + batch_size, len(baselines))), baselines,
+                                    self.mslist): i
+                    for i in range(0, len(baselines), batch_size)
+                }
 
-            for future in as_completed(future_to_baseline):
-                batch_start_idx = future_to_baseline[future]
-                try:
-                    results = future.result()
-                    for row_idxs, uvws, b_idx, time in results:
-                        UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
-                except Exception as exc:
-                    print(f'Batch starting at index {batch_start_idx} generated an exception: {exc}')
+                for future in as_completed(future_to_baseline):
+                    batch_start_idx = future_to_baseline[future]
+                    try:
+                        results = future.result()
+                        for row_idxs, uvws, b_idx, time in results:
+                            UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
+                    except Exception as e:
+                        print(f'Batch starting at index {batch_start_idx} generated an exception: {e}')
 
-        UVW.flush()
-        T.putcol("UVW", UVW)
-        T.close()
+            UVW.flush()
+            T.putcol("UVW", UVW)
 
         # Make final mapping
         self.make_mapping_uvw()
@@ -324,8 +321,8 @@ class Template:
                 baseline = future_to_baseline[future]
                 try:
                     future.result()  # Get the result
-                except Exception as exc:
-                    print(f'Baseline {baseline} generated an exception: {exc}')
+                except Exception as e:
+                    print(f'Baseline {baseline} generated an exception: {e}')
 
                 print_progress_bar(n + 1, len(baselines))
 
@@ -389,57 +386,54 @@ class Template:
 
         # Remove dysco compression
         self.tmpfile = decompress(tmp_ms)
-        self.ref_table = table(self.tmpfile, ack=False)
 
-        # Data description
-        newdesc_data = self.ref_table.getdesc()
+        with table(self.tmpfile, ack=False) as self.ref_table:
 
-        # Reshape
-        for col in ['DATA', 'FLAG', 'WEIGHT_SPECTRUM']:
-            newdesc_data[col]['shape'] = np.array([self.chan_num, 4])
+            # Data description
+            newdesc_data = self.ref_table.getdesc()
 
-        newdesc_data.pop('_keywords_')
+            # Reshape
+            for col in ['DATA', 'FLAG', 'WEIGHT_SPECTRUM']:
+                newdesc_data[col]['shape'] = np.array([self.chan_num, 4])
 
-        pprint(newdesc_data)
-        print()
+            newdesc_data.pop('_keywords_')
 
-        # Make main table
-        default_ms(self.outname, newdesc_data)
-        tnew = table(self.outname, readonly=False, ack=False)
-        tnew.addrows(nrows)
-        ant1, ant2 = make_ant_pairs(len(self.station_info), len(time_range))
-        t = repeat_elements(time_range, baseline_count)
-        tnew.putcol("TIME", t)
-        tnew.putcol("TIME_CENTROID", t)
-        tnew.putcol("ANTENNA1", ant1)
-        tnew.putcol("ANTENNA2", ant2)
-        tnew.putcol("EXPOSURE", np.array([np.diff(time_range)[0]] * nrows))
-        tnew.putcol("FLAG_ROW", np.array([False] * nrows))
-        tnew.putcol("INTERVAL", np.array([np.diff(time_range)[0]] * nrows))
-        tnew.flush(True)
-        tnew.close()
+            pprint(newdesc_data)
+            print()
 
-        # Set SPECTRAL_WINDOW info
-        self.add_spectral_window()
+            # Make main table
+            default_ms(self.outname, newdesc_data)
+            with table(self.outname, readonly=False, ack=False) as tnew:
+                tnew.addrows(nrows)
+                ant1, ant2 = make_ant_pairs(len(self.station_info), len(time_range))
+                t = repeat_elements(time_range, baseline_count)
+                tnew.putcol("TIME", t)
+                tnew.putcol("TIME_CENTROID", t)
+                tnew.putcol("ANTENNA1", ant1)
+                tnew.putcol("ANTENNA2", ant2)
+                tnew.putcol("EXPOSURE", np.array([np.diff(time_range)[0]] * nrows))
+                tnew.putcol("FLAG_ROW", np.array([False] * nrows))
+                tnew.putcol("INTERVAL", np.array([np.diff(time_range)[0]] * nrows))
 
-        # Set ANTENNA/STATION info
-        self.add_stations()
+            # Set SPECTRAL_WINDOW info
+            self.add_spectral_window()
 
-        # Set other tables (annoying table locks prevent parallel processing)
-        for subtbl in ['FIELD', 'HISTORY', 'FLAG_CMD', 'DATA_DESCRIPTION',
-                       'LOFAR_ELEMENT_FAILURE', 'OBSERVATION', 'POINTING',
-                       'POLARIZATION', 'PROCESSOR', 'STATE']:
-            try:
-                print("Add table ==> " + self.outname + "::" + subtbl)
+            # Set ANTENNA/STATION info
+            self.add_stations()
 
-                tsub = table(self.tmpfile+"::"+subtbl, ack=False, readonly=False)
-                tsub.copy(self.outname + '/' + subtbl, deep=True)
-                tsub.flush(True)
-                tsub.close()
-            except:
-                print(subtbl+" unknown")
+            # Set other tables (annoying table locks prevent parallel processing)
+            for subtbl in ['FIELD', 'HISTORY', 'FLAG_CMD', 'DATA_DESCRIPTION',
+                           'LOFAR_ELEMENT_FAILURE', 'OBSERVATION', 'POINTING',
+                           'POLARIZATION', 'PROCESSOR', 'STATE']:
+                try:
+                    print("Add table ==> " + self.outname + "::" + subtbl)
 
-        self.ref_table.close()
+                    with table(self.tmpfile+"::"+subtbl, ack=False, readonly=False) as tsub:
+                        tsub.copy(self.outname + '/' + subtbl, deep=True)
+                        tsub.flush(True)
+                except Exception as e:
+                    print(f"Error processing '{subtbl}': {e}")
+
 
         # Cleanup
         if 'tmp' in self.tmpfile:

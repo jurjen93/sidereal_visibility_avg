@@ -9,10 +9,8 @@ from .utils.dysco import compress
 from .utils.clean import clean_binary_files, clean_mapping_files
 from .utils.files import check_folder_exists
 from .utils.smearing import time_resolution
-from .utils.plot import make_baseline_uvw_plots
 from .template_ms import Template
 from .stack_ms import Stack
-from os import system as run_command
 
 
 def parse_args():
@@ -42,8 +40,10 @@ def main():
 
     # Make template
     args = parse_args()
+    print(args)
 
-    # one_lst_day_sec = 86164.1
+    if len(args.msin)<2:
+        sys.exit(f"ERROR: Need more than 1 ms, currently given: {' '.join(args.msin)}")
 
     # Verify if output exists
     if check_folder_exists(args.msout):
@@ -79,7 +79,7 @@ def main():
         s.stack_all(avg_uvw=args.interpolate_uvw)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"Elapsed time for stacking: {elapsed_time//60} minutes")
+        print(f"Elapsed time for stacking: {elapsed_time} seconds")
 
     # Clean up mapping files
     if not args.keep_mapping:
