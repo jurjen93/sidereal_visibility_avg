@@ -27,6 +27,7 @@ def remove_flagged_entries(input_table):
     Remove flagged entries.
     Note that this corrupts the time axis.
     """
+
     # Define the output table temporary name
     output_table = input_table + '.copy.tmp'
 

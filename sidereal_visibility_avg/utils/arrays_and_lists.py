@@ -1,30 +1,9 @@
-from sys import stdout, exit
+from sys import exit
 import numpy as np
 from casacore.tables import table
 from scipy.spatial import cKDTree
 from math import ceil
 from sklearn.neighbors import NearestNeighbors
-
-
-def print_progress_bar(index, total, bar_length=50):
-    """
-    Prints a progress bar to the console.
-
-    :param:
-        - index: the current index (0-based) in the iteration.
-        - total: the total number of indices.
-        - bar_length: the character length of the progress bar (default 50).
-    """
-
-    percent_complete = (index + 1) / total
-    filled_length = int(bar_length * percent_complete)
-    bar = "█" * filled_length + '-' * (bar_length - filled_length)
-    stdout.write(f'\rProgress: |{bar}| {percent_complete * 100:.1f}% Complete')
-    stdout.flush()  # Important to ensure the progress bar is updated in place
-
-    # Print a new line on completion
-    if index == total - 1:
-        print()
 
 
 def make_odd(i):
@@ -36,6 +15,7 @@ def make_odd(i):
 
     :return: odd digit
     """
+
     if int(i) % 2 == 0:
         i += 1
 
@@ -51,6 +31,7 @@ def get_largest_divider(inp, max=1000):
 
     :return: largest divider from inp bound by max
     """
+
     for r in range(max)[::-1]:
         if inp % r == 0:
             return r
@@ -68,6 +49,7 @@ def repeat_elements(original_list, repeat_count):
     :return:
         - A new list where each element from the original list is repeated.
     """
+
     return np.array([element for element in original_list for _ in range(repeat_count)])
 
 
@@ -76,12 +58,13 @@ def find_closest_index(arr, value):
     Find the index of the closest value in the array to the given value.
 
     :param:
-        - arr: A NumPy array of values.
-        - value: A float value to find the closest value to.
+        - arr: numpy array.
+        - value: float value to find the closest value to.
 
     :return:
         - The index of the closest value in the array.
     """
+
     # Calculate the absolute difference with the given value
     differences = np.abs(arr - value)
     print(f"Minimal difference: {min(differences)}")
@@ -94,9 +77,9 @@ def find_closest_index(arr, value):
 
 def find_closest_index_list(a1, a2):
     """
-    Find the indices of the closest values between two arrays using sklearn's NearestNeighbors.
-    Can be much faster with approximate nearest neighbors (ANN).
+    Find the indices of the closest values between two arrays.
     """
+
     a1, a2 = np.array(a1), np.array(a2)
 
     # Create a nearest neighbors model (use 'ball_tree' or 'kd_tree' for small, 'brute' for large datasets)
@@ -110,8 +93,7 @@ def find_closest_index_list(a1, a2):
 
 def find_closest_index_multi_array(a1, a2):
     """
-    Find the indices of the closest values between two multi-D arrays (a1 and a2),
-    considering both the original and negated versions of a2 without duplicating the data.
+    Find the indices of the closest values.
 
     :param:
         - a1: first array (shape NxM)
@@ -120,17 +102,18 @@ def find_closest_index_multi_array(a1, a2):
     :return:
         - A list of indices corresponding to the nearest neighbors in a2 for each point in a1.
     """
+
     # Ensure inputs are numpy arrays
     a1 = np.asarray(a1)
     a2 = np.asarray(a2)
 
-    # Build a KDTree for a2 only (without negating or doubling the array)
+    # Build a KDTree for a2 only
     tree = cKDTree(a2)
 
     # Query the tree for the closest points in a1
     distances, indices = tree.query(a1)
 
-    # Now check for negated versions of a1, directly
+    # Check for negated versions of a1, directly
     neg_distances, neg_indices = tree.query(-a1)
 
     # Combine the results from both queries
@@ -152,10 +135,7 @@ def map_array_dict(arr, dct):
         (If an element in the input array does not have a corresponding mapping in the mapping_dict, it will be left unchanged)
     """
 
-    # Vectorize a simple lookup function
     lookup = np.vectorize(lambda x: dct.get(x, x))
-
-    # Apply this vectorized function to the input array
     output_array = lookup(arr)
 
     return output_array
@@ -221,7 +201,7 @@ def resample_array(data, factor):
     # Number of points in the resampled array
     new_n_points = factor * (n_points - 1) + 1
 
-    # Generate the new set of equally spaced indices
+    # New set of equally spaced indices
     original_indices = np.arange(n_points)
     new_indices = np.linspace(0, n_points - 1, new_n_points + 1)
 
@@ -242,6 +222,7 @@ def sort_list(zipped_list):
     :return:
         sorted list
     """
+
     return sorted(zipped_list, key=lambda item: item[0])
 
 

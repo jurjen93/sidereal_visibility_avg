@@ -7,6 +7,7 @@ def check_folder_exists(folder_path):
     """
     Check if folder exists
     """
+
     return path.isdir(folder_path)
 
 def load_json(file_path):
@@ -19,6 +20,7 @@ def read_mapping(mapping_folder):
     """
     Read mapping with multi-threads
     """
+
     # Get the list of JSON files
     json_files = glob(path.join(mapping_folder, "*.json"))
 

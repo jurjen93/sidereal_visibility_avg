@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 import time
 from .utils.dysco import compress
 from .utils.clean import clean_binary_files, clean_mapping_files
-from .utils.files import check_folder_exists
+from .utils.file_handling import check_folder_exists
 from .utils.smearing import time_resolution
 from .template_ms import Template
 from .stack_ms import Stack

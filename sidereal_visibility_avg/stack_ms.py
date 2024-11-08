@@ -5,10 +5,12 @@ import sys
 import psutil
 from glob import glob
 from scipy.ndimage import gaussian_filter1d
-from .utils.helpers import print_progress_bar, find_closest_index_list
-from .utils.files import load_json, read_mapping
+
+from .utils.arrays_and_lists import find_closest_index_list
+from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
 from .utils.parallel import sum_arrays_chunkwise
+from .utils.printing import print_progress_bar
 
 
 class Stack:

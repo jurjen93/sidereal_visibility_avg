@@ -10,16 +10,15 @@ def mjd_seconds_to_lst_seconds_single(mjd_seconds, longitude_deg=6.869837):
     """
     Convert time in modified Julian Date time to LST for a single value or small chunk.
     """
+
     # Convert seconds to days for MJD
     mjd_days = mjd_seconds / 86400.0
-
-    # Create an astropy Time object
     time_utc = Time(mjd_days, format='mjd', scale='utc')
 
-    # Define the observer's location using longitude (latitude doesn't affect LST)
+    # Observer's location
     location = EarthLocation(lon=longitude_deg * u.deg, lat=52.915122 * u.deg)
 
-    # Calculate LST in hours
+    # LST in hours
     lst_hours = time_utc.sidereal_time('apparent', longitude=location.lon).hour
 
     # Convert LST from hours to seconds
@@ -39,6 +38,7 @@ def mjd_seconds_to_lst_seconds(mjd_seconds, longitude_deg=6.869837):
     :return:
         - Array of time in LST (seconds)
     """
+
     # Split the mjd_seconds array into chunks for parallel processing
     n_jobs = max(cpu_count() - 1, 1)  # Use all available cores minus 1
     chunk_size = len(mjd_seconds) // n_jobs

@@ -3,9 +3,9 @@ from joblib import Parallel, delayed
 import tempfile
 import json
 from os import path, cpu_count
-from .helpers import squeeze_to_intlist
+from .arrays_and_lists import squeeze_to_intlist
 from glob import glob
-from .helpers import find_closest_index_multi_array
+from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
@@ -13,7 +13,7 @@ from multiprocessing import cpu_count
 
 def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
     """
-    Sums two arrays in chunks using joblib for parallel processing.
+    Sums two arrays in chunks using parallel processing.
 
     :param:
         - array1: np.ndarray or np.memmap
@@ -29,7 +29,7 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=T
     # Ensure the arrays have the same length
     assert len(array1) == len(array2), "Arrays must have the same length"
 
-    # Check if un-memmap is needed and feasible
+    # Check if un-memmap is needed
     if un_memmap and isinstance(array1, np.memmap):
         try:
             array1 = np.array(array1)
@@ -105,7 +105,6 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
     # Determine optimal batch size
     batch_size = max(len(uniq_ant_pairs) // (cpu_count() * 2), 1)  # Split tasks across all cores
 
-    # Use ProcessPoolExecutor for process-based parallelism
     n_jobs = max(cpu_count() - 3, 1)  # Use all available CPU cores
 
     try:
@@ -130,6 +129,7 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
 
 def process_ms(ms):
     """Process MS content in parallel (using separate processes)"""
+
     mscontent = get_ms_content(ms)
     stations, lofar_stations, channels, dfreq, total_time_seconds, dt, min_t, max_t = mscontent.values()
     return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
@@ -137,6 +137,7 @@ def process_ms(ms):
 
 def process_baseline_uvw(baseline, folder, UVW):
     """Parallel processing baseline"""
+
     try:
         if not folder:
             folder = '.'
@@ -159,6 +160,7 @@ def process_baseline_uvw(baseline, folder, UVW):
 
 def process_baseline_int(baseline_indices, baselines, mslist):
     """Process baselines parallel executor"""
+
     results = []
     for b_idx in baseline_indices:
         baseline = baselines[b_idx]

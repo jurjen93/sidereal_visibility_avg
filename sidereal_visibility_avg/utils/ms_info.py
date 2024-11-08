@@ -21,19 +21,9 @@ def same_phasedir(mslist: list = None):
                 exit("MS do not have the same phase center, check "+ms)
 
 
-
 def get_ms_content(ms):
     """
     Get MS content with speed optimizations.
-
-    :param:
-        - ms: measurement set
-
-    :return:
-        - station names
-        - frequency channels
-        - total time in seconds
-        - delta time
     """
 
     with table(ms, ack=False) as T, \
@@ -42,7 +32,7 @@ def get_ms_content(ms):
          table(ms+"::LOFAR_ANTENNA_FIELD", ack=False) as L, \
          table(ms+"::LOFAR_STATION", ack=False) as S:
 
-        # Get LOFAR antenna info in a single call
+        # Get LOFAR antenna info
         lofar_stations = np.column_stack((S.getcol("NAME"), S.getcol("CLOCK_ID"))).tolist()
 
         # Retrieve relevant columns from ANTENNA and LOFAR_ANTENNA_FIELD tables
@@ -70,7 +60,6 @@ def get_ms_content(ms):
         time_lst = mjd_seconds_to_lst_seconds_single(time)
         time_min_lst, time_max_lst = time_lst.min(), time_lst.max()
 
-    # Print output (could be skipped for speed)
     print(f'\nCONTENT from {ms}\n'
           '----------\n'
           f'Stations: {", ".join([s[0] for s in lofar_stations])}\n'
@@ -124,6 +113,7 @@ def unique_station_list(station_list):
     :return:
         - filtered list of stations
     """
+
     unique_dict = {}
     for item in station_list:
         if item[0] not in unique_dict:

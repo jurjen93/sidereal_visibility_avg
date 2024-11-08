@@ -9,12 +9,12 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
 from .utils.dysco import decompress
-from .utils.helpers import print_progress_bar, repeat_elements, map_array_dict, find_closest_index_list
-from .utils.files import check_folder_exists
+from .utils.arrays_and_lists import repeat_elements, map_array_dict, find_closest_index_list
+from .utils.file_handling import check_folder_exists
 from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
 from .utils.uvw import resample_uwv
 from .utils.lst import mjd_seconds_to_lst_seconds, mjd_seconds_to_lst_seconds_single
-
+from .utils.printing import print_progress_bar
 
 
 class Template:
@@ -415,13 +415,13 @@ class Template:
                 tnew.putcol("FLAG_ROW", np.array([False] * nrows))
                 tnew.putcol("INTERVAL", np.array([np.diff(time_range)[0]] * nrows))
 
-            # Set SPECTRAL_WINDOW info
+            # Get SPECTRAL_WINDOW info
             self.add_spectral_window()
 
-            # Set ANTENNA/STATION info
+            # Get ANTENNA/STATION info
             self.add_stations()
 
-            # Set other tables (annoying table locks prevent parallel processing)
+            # Get other tables (annoying table locks prevent parallel processing)
             for subtbl in ['FIELD', 'HISTORY', 'FLAG_CMD', 'DATA_DESCRIPTION',
                            'LOFAR_ELEMENT_FAILURE', 'OBSERVATION', 'POINTING',
                            'POLARIZATION', 'PROCESSOR', 'STATE']:
@@ -433,7 +433,6 @@ class Template:
                         tsub.flush(True)
                 except Exception as e:
                     print(f"Error processing '{subtbl}': {e}")
-
 
         # Cleanup
         if 'tmp' in self.tmpfile:
