@@ -8,12 +8,12 @@ from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
-import numexpr as ne
+import psutil
 
 
 def parallel_array_sum(array1, array2):
     """
-    Sums two arrays in parallel using NumExpr.
+    Sums two arrays in parallel using Joblib.
 
     Parameters:
     array1 (numpy.ndarray): First input array.
@@ -23,8 +23,22 @@ def parallel_array_sum(array1, array2):
     numpy.ndarray: Element-wise sum of the two arrays.
     """
 
-    # Use NumExpr for parallel computation
-    return ne.evaluate("array1 + array2")
+    n_jobs = psutil.cpu_count(logical=True)
+
+    # Chunk size for splitting arrays
+    chunk_size = len(array1) // n_jobs
+
+    # Function to sum chunks
+    def sum_chunk(start, end):
+        return array1[start:end] + array2[start:end]
+
+    # Parallel processing
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(sum_chunk)(i, i + chunk_size) for i in range(0, len(array1), chunk_size)
+    )
+
+    # Concatenate results
+    return np.concatenate(results)
 
 def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
     """
