@@ -8,37 +8,61 @@ from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
-import psutil
+from multiprocessing import shared_memory
 
-
-def parallel_array_sum(array1, array2):
+def parallel_sum_shared(array1, array2, n_jobs=-1):
     """
-    Sums two arrays in parallel using Joblib.
+    Sums two arrays in parallel across all available CPU cores using shared memory.
 
     Parameters:
     array1 (numpy.ndarray): First input array.
     array2 (numpy.ndarray): Second input array.
+    n_jobs (int): Number of parallel jobs. Default is -1 (use all available cores).
 
     Returns:
     numpy.ndarray: Element-wise sum of the two arrays.
     """
+    # Ensure inputs are NumPy arrays
+    array1 = np.asarray(array1, dtype=np.float64)
+    array2 = np.asarray(array2, dtype=np.float64)
+    n = len(array1)
 
-    n_jobs = psutil.cpu_count(logical=True)
+    # Create shared memory
+    shm1 = shared_memory.SharedMemory(create=True, size=array1.nbytes)
+    shm2 = shared_memory.SharedMemory(create=True, size=array2.nbytes)
+    shm_out = shared_memory.SharedMemory(create=True, size=array1.nbytes)
 
-    # Chunk size for splitting arrays
-    chunk_size = len(array1) // n_jobs
+    # Copy data into shared memory
+    shared_array1 = np.ndarray(array1.shape, dtype=array1.dtype, buffer=shm1.buf)
+    shared_array2 = np.ndarray(array2.shape, dtype=array2.dtype, buffer=shm2.buf)
+    shared_output = np.ndarray(array1.shape, dtype=array1.dtype, buffer=shm_out.buf)
+    np.copyto(shared_array1, array1)
+    np.copyto(shared_array2, array2)
 
-    # Function to sum chunks
+    # Chunk processing function
     def sum_chunk(start, end):
-        return array1[start:end] + array2[start:end]
+        shared_output[start:end] = shared_array1[start:end] + shared_array2[start:end]
+
+    # Determine chunk size
+    chunk_size = n // n_jobs + 1
 
     # Parallel processing
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(sum_chunk)(i, i + chunk_size) for i in range(0, len(array1), chunk_size)
+    Parallel(n_jobs=n_jobs)(
+        delayed(sum_chunk)(i, min(i + chunk_size, n)) for i in range(0, n, chunk_size)
     )
 
-    # Concatenate results
-    return np.concatenate(results)
+    # Collect result
+    result = shared_output.copy()
+
+    # Cleanup shared memory
+    shm1.close()
+    shm1.unlink()
+    shm2.close()
+    shm2.unlink()
+    shm_out.close()
+    shm_out.unlink()
+
+    return result
 
 def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
     """

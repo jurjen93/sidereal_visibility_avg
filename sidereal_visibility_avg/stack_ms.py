@@ -133,9 +133,9 @@ class Stack:
                                     indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
-                            new_data[row_idxs_new, :] = parallel_array_sum(new_data[row_idxs_new, :], data[row_idxs, :])
+                            new_data[row_idxs_new, :] = parallel_sum_shared(new_data[row_idxs_new, :], data[row_idxs, :])
 
-                            uvw_weights[row_idxs_new, :] = parallel_array_sum(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape))
+                            uvw_weights[row_idxs_new, :] = parallel_sum_shared(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape))
 
                             try:
                                 uvw_weights.flush()
@@ -143,7 +143,7 @@ class Stack:
                                 pass
 
                         else:
-                            new_data[np.ix_(row_idxs_new, freq_idxs)] = parallel_array_sum(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :])
+                            new_data[np.ix_(row_idxs_new, freq_idxs)] = parallel_sum_shared(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :])
 
                         try:
                             new_data.flush()
