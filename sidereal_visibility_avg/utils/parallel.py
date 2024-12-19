@@ -64,7 +64,7 @@ def parallel_sum(array1, array2, n_jobs=-1):
 
     return result
 
-def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
+def sum_arrays_chunkwise(array1, array2, chunk_size=1_000_000, n_jobs=-1, un_memmap=True):
     """
     Sums two arrays in chunks using parallel processing.
 
