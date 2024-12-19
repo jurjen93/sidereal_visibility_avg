@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('--dysco', action='store_true', help='Dysco compression of data')
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template')
     parser.add_argument('--interpolate_uvw', action='store_true', help='Interpolate UVW with nearest neighbours')
-    parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (for debugging)')
+    parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging)')
 
     return parser.parse_args()
 

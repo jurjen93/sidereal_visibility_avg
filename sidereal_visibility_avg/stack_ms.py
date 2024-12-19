@@ -136,11 +136,19 @@ class Stack:
                             new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :])
 
                             uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape))
-                            uvw_weights.flush()
+
+                            try:
+                                uvw_weights.flush()
+                            except AttributeError:
+                                pass
+
                         else:
                             new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :])
 
-                        # new_data.flush()
+                        try:
+                            new_data.flush()
+                        except AttributeError:
+                            pass
 
                     print_progress_bar(chunk_idx, chunks)
                     t.close()
