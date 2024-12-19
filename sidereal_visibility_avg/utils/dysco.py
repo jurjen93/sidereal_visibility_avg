@@ -26,7 +26,7 @@ def decompress(ms):
 
     if is_dysco_compressed(ms):
 
-        print('\n----------\nREMOVE DYSCO COMPRESSION\n----------\n')
+        print('Remove Dysco compression')
 
         if path.exists(f'{ms}.tmp'):
             rmtree(f'{ms}.tmp')
@@ -48,7 +48,7 @@ def compress(ms):
 
     if not is_dysco_compressed(ms):
 
-        print('DYSCO COMPRESSION')
+        print('Apply Dysco compression')
 
         cmd = f"DP3 msin={ms} msout={ms}.tmp msout.overwrite=true msout.storagemanager=dysco"
 

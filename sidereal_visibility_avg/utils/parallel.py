@@ -11,12 +11,11 @@ from multiprocessing import cpu_count
 
 def sum_arrays_chunkwise(array1, array2, chunk_size):
     """
-    Sums two arrays in chunks using parallel processing.
+    Sums two arrays with maximum core utilization.
 
     Parameters:
     - array1: numpy.ndarray, the first array to sum.
     - array2: numpy.ndarray, the second array to sum.
-    - chunk_size: int, size of chunks to process in parallel.
 
     Returns:
     - numpy.ndarray, the summed array.
@@ -25,20 +24,26 @@ def sum_arrays_chunkwise(array1, array2, chunk_size):
     if len(array1) != len(array2):
         raise ValueError("Arrays must have the same length")
 
-    # Function to sum a single chunk
+    # Function to sum a chunk
     def sum_chunk(start_idx, end_idx):
         return array1[start_idx:end_idx] + array2[start_idx:end_idx]
 
     # Calculate the total number of elements
     n_elements = len(array1)
 
-    # Determine the start and end indices for chunks
+    # Determine the number of available cores
+    n_jobs = Parallel(n_jobs=-1)._effective_n_jobs()
+
+    # Dynamically assign chunks to cores
+    chunk_size = max(1, n_elements // (n_jobs * 4))  # Small enough for dynamic balancing
     chunk_indices = [(i, min(i + chunk_size, n_elements)) for i in range(0, n_elements, chunk_size)]
 
-    # Use parallel processing to sum chunks
-    results = Parallel(n_jobs=-1)(delayed(sum_chunk)(start, end) for start, end in chunk_indices)
+    # Parallel processing with dynamic scheduling
+    results = Parallel(n_jobs=n_jobs, prefer="threads")(
+        delayed(sum_chunk)(start, end) for start, end in chunk_indices
+    )
 
-    # Combine results into a single array
+    # Combine the results
     return np.concatenate(results)
 
 def sum_arrays_chunkwise_old(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):

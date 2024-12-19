@@ -256,9 +256,6 @@ class Template:
             # Determine number of workers
             num_workers = max(cpu_count()-3, 1)  # I/O-bound heuristic
 
-            print(f"Using {num_workers} workers for making UVW column and accurate baseline mapping."
-                  f"\nThis is an expensive operation. So, be patient..")
-
             batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
 
             with ProcessPoolExecutor(max_workers=num_workers) as executor:
@@ -308,7 +305,7 @@ class Template:
 
         num_workers = min(cpu_count()-3, len(baselines))
 
-        print('\nMake new mapping based on UVW points')
+        print('\nMake final UVW mapping to output dataset')
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             future_to_baseline = {executor.submit(process_baseline_uvw, baseline,
                                                   '/'.join(self.mslist[0].split('/')[0:-1]), UVW): baseline for baseline
