@@ -2,6 +2,7 @@ from casacore.tables import table
 import numpy as np
 from .lst import mjd_seconds_to_lst_seconds_single
 from sys import exit
+import psutil
 
 
 def same_phasedir(mslist: list = None):
@@ -158,6 +159,62 @@ def make_ant_pairs(n_ant, n_time):
 
 
 def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = None):
+    """
+    Get data arrays (new data and weights)
+
+    :param:
+        - column: column name (DATA, WEIGHT_SPECTRUM, WEIGHT, OR UVW)
+        - nrows: number of rows
+        - freq_len: frequency axis length
+
+    :return:
+        - new_data: new data array (empty array with correct shape)
+        - weights: weights corresponding to new data array (empty array with correct shape)
+    """
+
+    tmpfilename = column.lower() + '.tmp.dat'
+    tmpfilename_weights = column.lower() + '_weights.tmp.dat'
+
+    if column in ['UVW']:
+        weights_shape = (nrows, 3)
+        weights_dtype = np.float16
+        weights_size = np.prod(weights_shape) * np.dtype(weights_dtype).itemsize
+        available_memory = psutil.virtual_memory().available
+
+        if weights_size > available_memory / 4:
+            weights = np.memmap(tmpfilename_weights, dtype=weights_dtype, mode='w+', shape=weights_shape)
+        else:
+            weights = np.zeros(weights_shape, dtype=weights_dtype)
+
+        weights[:] = 0
+    else:
+        weights = None
+
+    if column in ['DATA', 'WEIGHT_SPECTRUM']:
+        dtp = np.complex128 if column == 'DATA' else np.float32
+        shape = (nrows, freq_len, 4)
+
+    elif column == 'WEIGHT':
+        shape, dtp = (nrows, freq_len), np.float32
+
+    elif column == 'UVW':
+        shape, dtp = (nrows, 3), np.float32
+
+    else:
+        exit("ERROR: Use only DATA, WEIGHT_SPECTRUM, WEIGHT, or UVW")
+
+    data_size = np.prod(shape) * np.dtype(dtp).itemsize
+    available_memory = psutil.virtual_memory().available
+
+    if data_size > available_memory / 4:
+        new_data = np.memmap(tmpfilename, dtype=dtp, mode='w+', shape=shape)
+    else:
+        new_data = np.zeros(shape, dtype=dtp)
+
+    return new_data, weights
+
+
+def get_data_arrays_old(column: str = 'DATA', nrows: int = None, freq_len: int = None):
     """
     Get data arrays (new data and weights)
 

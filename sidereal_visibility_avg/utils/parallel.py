@@ -9,7 +9,7 @@ from .ms_info import get_ms_content
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 
-def sum_arrays_chunkwise(array1, array2, chunk_size):
+def sum_arrays_chunkwise(array1, array2):
     """
     Sums two arrays with maximum core utilization.
 

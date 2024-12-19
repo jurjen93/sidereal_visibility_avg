@@ -48,7 +48,7 @@ def main():
 
     # Verify if output exists
     if check_folder_exists(args.msout):
-        # sys.exit(f"ERROR: {args.msout} already exists! Delete file first if you want to overwrite.")
+        print(f"{args.msout} already exists, will be overwritten")
         rmtree(args.msout)
 
 

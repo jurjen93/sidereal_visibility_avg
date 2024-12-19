@@ -57,8 +57,6 @@ class Template:
         Add SPECTRAL_WINDOW as sub table
         """
 
-        # print("Add table ==> " + self.outname + "::SPECTRAL_WINDOW")
-
         with table(self.ref_table.getkeyword('SPECTRAL_WINDOW'), ack=False) as tnew_spw_tmp:
             newdesc = tnew_spw_tmp.getdesc()
         for col in ['CHAN_WIDTH', 'CHAN_FREQ', 'RESOLUTION', 'EFFECTIVE_BW']:
@@ -101,8 +99,6 @@ class Template:
         lofar_names = np.array([sp[0] for sp in self.lofar_stations_info])
         clock = np.array([sp[1] for sp in self.lofar_stations_info])
 
-        # print("Add table ==> " + self.outname + "::FEED")
-
         with table(self.ref_table.getkeyword('FEED'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
 
@@ -119,8 +115,6 @@ class Template:
             tnew_feed.putcol("NUM_RECEPTORS", np.array([2] * len(stations)))
             tnew_feed.putcol("SPECTRAL_WINDOW_ID", np.array([-1] * len(stations)))
             tnew_feed.putcol("TIME", np.array([5.e9] * len(stations)))
-
-        # print("Add table ==> " + self.outname + "::ANTENNA")
 
         with table(self.ref_table.getkeyword('ANTENNA'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
@@ -139,8 +133,6 @@ class Template:
             tnew_ant.putcol("LOFAR_STATION_ID", ids)
             tnew_ant.putcol("LOFAR_PHASE_REFERENCE", phase_ref)
 
-        # print("Add table ==> " + self.outname + "::LOFAR_ANTENNA_FIELD")
-
         with table(self.ref_table.getkeyword('LOFAR_ANTENNA_FIELD'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
 
@@ -151,8 +143,6 @@ class Template:
                 # Using taql because the shapes for Dutch and International stations are not similar (cannot be opened in Python)
                 taql(f"INSERT INTO {self.outname}::LOFAR_ANTENNA_FIELD SELECT FROM {ms}::LOFAR_ANTENNA_FIELD b WHERE b.ANTENNA_ID={ind}")
             tnew_field.putcol("ANTENNA_ID", np.array(range(len(stations))))
-
-        # print("Add table ==> " + self.outname + "::LOFAR_STATION")
 
         with table(self.ref_table.getkeyword('LOFAR_STATION'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
@@ -417,8 +407,6 @@ class Template:
                            'LOFAR_ELEMENT_FAILURE', 'OBSERVATION', 'POINTING',
                            'POLARIZATION', 'PROCESSOR', 'STATE']:
                 try:
-                    # print("Add table ==> " + self.outname + "::" + subtbl)
-
                     with table(self.tmpfile+"::"+subtbl, ack=False, readonly=False) as tsub:
                         tsub.copy(self.outname + '/' + subtbl, deep=True)
                         tsub.flush(True)
