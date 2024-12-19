@@ -3,7 +3,6 @@ from joblib import Parallel, delayed
 import tempfile
 import json
 from os import path, cpu_count
-from .arrays_and_lists import squeeze_to_intlist
 from glob import glob
 from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
@@ -29,35 +28,43 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=T
     # Ensure the arrays have the same length
     assert len(array1) == len(array2), "Arrays must have the same length"
 
-    # Check if un-memmap is needed
-    if un_memmap and isinstance(array1, np.memmap):
-        try:
-            array1 = np.array(array1)
-        except MemoryError:
-            pass  # If memory error, fall back to using memmap
+    # Convert memmap arrays to regular arrays if `un_memmap` is True
+    def try_unmemmap(array):
+        if un_memmap and isinstance(array, np.memmap):
+            try:
+                return np.array(array)
+            except MemoryError:
+                pass  # Fall back to memmap if memory error occurs
+        return array
 
-    if un_memmap and isinstance(array2, np.memmap):
-        try:
-            array2 = np.array(array2)
-        except MemoryError:
-            pass  # If memory error, fall back to using memmap
+    array1 = try_unmemmap(array1)
+    array2 = try_unmemmap(array2)
 
     n = len(array1)
 
+    # Determine the output storage type (memmap if input is memmap, else ndarray)
     if isinstance(array1, np.memmap) or isinstance(array2, np.memmap):
         temp_file = tempfile.NamedTemporaryFile(delete=False)
         result_array = np.memmap(temp_file.name, dtype=array1.dtype, mode='w+', shape=array1.shape)
     else:
         result_array = np.empty_like(array1)
 
-    def sum_chunk_to_result(start, end):
+    # Define the chunk summation task
+    def sum_chunk(start, end):
         result_array[start:end] = array1[start:end] + array2[start:end]
 
-    chunks = ((i, min(i + chunk_size, n)) for i in range(0, n, chunk_size))
+    # Create chunk indices
+    chunk_indices = [(i, min(i + chunk_size, n)) for i in range(0, n, chunk_size)]
 
-    Parallel(n_jobs=n_jobs, prefer="threads")(delayed(sum_chunk_to_result)(start, end) for start, end in chunks)
+    # Use joblib for parallel processing, favoring threads for memory-bound tasks
+    Parallel(n_jobs=n_jobs, prefer="threads")(delayed(sum_chunk)(start, end) for start, end in chunk_indices)
+
+    # Flush changes to disk if using memmap
+    if isinstance(result_array, np.memmap):
+        result_array.flush()
 
     return result_array
+
 
 
 def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):

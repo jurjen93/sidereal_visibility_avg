@@ -32,10 +32,11 @@ class Stack:
         self.freq_len = self.ref_freqs.__len__()
         F.close()
 
+        # Memory and chunk size
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         target_chunk_size = total_memory / chunkmem
-        self.chunk_size = min(int(target_chunk_size * (1024 ** 3) / np.dtype(np.float128).itemsize/2/self.freq_len), 500_000)
+        self.chunk_size = min(int(target_chunk_size * (1024 ** 3) / np.dtype(np.float128).itemsize/2/self.freq_len), 10_000_000)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
 
@@ -65,16 +66,17 @@ class Stack:
         self.T.putcol('UVW', uvw)
 
 
-    def stack_all(self, column: str = 'DATA', avg_uvw: bool = False):
+    def stack_all(self, column: str = 'DATA', interpolate_uvw: bool = False):
         """
         Stack all MS
 
         :param:
             - column: column name (currently only DATA)
+            - interpolate_uvw: interpolate uvw coordinates (nearest neightbour + weighted average)
         """
 
         if column == 'DATA':
-            if avg_uvw:
+            if interpolate_uvw:
                 columns = ['UVW', column, 'WEIGHT_SPECTRUM']
             else:
                 columns = [column, 'WEIGHT_SPECTRUM']
@@ -129,7 +131,6 @@ class Stack:
                         row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
                         row_idxs = [int(i - chunk_idx * self.chunk_size) for i in
                                     indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
-
 
                         if col == 'UVW':
                             new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :],

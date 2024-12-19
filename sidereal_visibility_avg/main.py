@@ -11,6 +11,7 @@ from .utils.file_handling import check_folder_exists
 from .utils.smearing import time_resolution
 from .template_ms import Template
 from .stack_ms import Stack
+from shutil import rmtree
 
 
 def parse_args():
@@ -47,7 +48,9 @@ def main():
 
     # Verify if output exists
     if check_folder_exists(args.msout):
-        sys.exit(f"ERROR: {args.msout} already exists! Delete file first if you want to overwrite.")
+        # sys.exit(f"ERROR: {args.msout} already exists! Delete file first if you want to overwrite.")
+        rmtree(args.msout)
+
 
     avg = 1
     if args.time_res is not None:
@@ -76,7 +79,7 @@ def main():
     if not args.make_only_template:
         start_time = time.time()
         s = Stack(args.msin, args.msout, chunkmem=args.chunk_mem)
-        s.stack_all(avg_uvw=args.interpolate_uvw)
+        s.stack_all(interpolate_uvw=args.interpolate_uvw)
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Elapsed time for stacking: {elapsed_time} seconds")
