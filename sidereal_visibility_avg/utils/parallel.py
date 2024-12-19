@@ -10,7 +10,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from multiprocessing import shared_memory
 
-def parallel_sum_shared(array1, array2, n_jobs=-1):
+def parallel_sum(array1, array2, n_jobs=-1):
     """
     Sums two arrays in parallel across all available CPU cores using shared memory.
 

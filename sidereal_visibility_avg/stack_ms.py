@@ -9,7 +9,7 @@ from scipy.ndimage import gaussian_filter1d
 from .utils.arrays_and_lists import find_closest_index_list
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
-from .utils.parallel import sum_arrays_chunkwise, parallel_array_sum
+from .utils.parallel import sum_arrays_chunkwise, parallel_sum
 from .utils.printing import print_progress_bar
 
 
@@ -133,9 +133,9 @@ class Stack:
                                     indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
-                            new_data[row_idxs_new, :] = parallel_sum_shared(new_data[row_idxs_new, :], data[row_idxs, :])
+                            new_data[row_idxs_new, :] = parallel_sum(new_data[row_idxs_new, :], data[row_idxs, :])
 
-                            uvw_weights[row_idxs_new, :] = parallel_sum_shared(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape))
+                            uvw_weights[row_idxs_new, :] = parallel_sum(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape))
 
                             try:
                                 uvw_weights.flush()
@@ -143,7 +143,7 @@ class Stack:
                                 pass
 
                         else:
-                            new_data[np.ix_(row_idxs_new, freq_idxs)] = parallel_sum_shared(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :])
+                            new_data[np.ix_(row_idxs_new, freq_idxs)] = parallel_sum(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :])
 
                         try:
                             new_data.flush()
