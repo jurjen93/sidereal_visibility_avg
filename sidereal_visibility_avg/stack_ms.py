@@ -140,7 +140,7 @@ class Stack:
                         else:
                             new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :])
 
-                        new_data.flush()
+                        # new_data.flush()
 
                     print_progress_bar(chunk_idx, chunks)
                     t.close()
