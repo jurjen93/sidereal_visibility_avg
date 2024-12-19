@@ -8,51 +8,25 @@ from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
-import multiprocessing
-import threading
-import psutil
+import numexpr as ne
 
 
-class Sum:
-    def __init__(self):
-        # Initialize the sum array and a lock
-        self.value = None
-        self.lock = threading.Lock()
-        self.count = 0
+def parallel_array_sum(array1, array2):
+    """
+    Sums two arrays in parallel using NumExpr.
 
-    def add(self, value):
-        with self.lock:  # Ensure thread-safe access
-            if self.value is None:
-                self.value = value.copy()
-            else:
-                self.value += value
-            self.count += 1
+    Parameters:
+    array1 (numpy.ndarray): First input array.
+    array2 (numpy.ndarray): Second input array.
 
-def computation(index, array1, array2):
-    # Perform element-wise addition of the slices of the arrays
-    return array1[index] + array2[index]
+    Returns:
+    numpy.ndarray: Element-wise sum of the two arrays.
+    """
 
-def sum_arrays_chunkwise(array1, array2, num_processes=psutil.cpu_count(logical=True)):
-    if array1.shape != array2.shape:
-        raise ValueError("Arrays must have the same shape.")
+    # Use NumExpr for parallel computation
+    return ne.evaluate("array1 + array2")
 
-    num_iters = array1.shape[0]  # Assuming computation happens along the first axis
-    pool = multiprocessing.Pool(processes=num_processes)
-    sumArr = Sum()
-
-    for index in range(num_iters):
-        pool.apply_async(
-            computation,
-            args=(index, array1, array2),
-            callback=sumArr.add
-        )
-
-    pool.close()
-    pool.join()  # Wait for all processes to finish
-
-    return sumArr.value
-
-def sum_arrays_chunkwise_old(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
+def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
     """
     Sums two arrays in chunks using parallel processing.
 
