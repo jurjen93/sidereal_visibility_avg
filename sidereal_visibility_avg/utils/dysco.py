@@ -30,7 +30,7 @@ def decompress(ms):
 
         if path.exists(f'{ms}.tmp'):
             rmtree(f'{ms}.tmp')
-        run_command(f"DP3 msin={ms} msout={ms}.tmp steps=[]")
+        run_command(f"DP3 msin={ms} msout={ms}.tmp steps=[] > /dev/null 2>&1")
         print('----------')
         return ms + '.tmp'
 
@@ -57,7 +57,7 @@ def compress(ms):
         steps = str(steps).replace("'", "").replace(' ','')
         cmd += f' steps={steps}'
 
-        run_command(cmd)
+        run_command(cmd+' > /dev/null 2>&1')
 
         try:
             t = table(f"{ms}.tmp", ack=False) # test if exists

@@ -4,7 +4,6 @@ from os import path, makedirs, cpu_count
 from os import system as run_command
 import sys
 from shutil import rmtree
-from pprint import pprint
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
@@ -58,7 +57,7 @@ class Template:
         Add SPECTRAL_WINDOW as sub table
         """
 
-        print("Add table ==> " + self.outname + "::SPECTRAL_WINDOW")
+        # print("Add table ==> " + self.outname + "::SPECTRAL_WINDOW")
 
         with table(self.ref_table.getkeyword('SPECTRAL_WINDOW'), ack=False) as tnew_spw_tmp:
             newdesc = tnew_spw_tmp.getdesc()
@@ -102,7 +101,7 @@ class Template:
         lofar_names = np.array([sp[0] for sp in self.lofar_stations_info])
         clock = np.array([sp[1] for sp in self.lofar_stations_info])
 
-        print("Add table ==> " + self.outname + "::FEED")
+        # print("Add table ==> " + self.outname + "::FEED")
 
         with table(self.ref_table.getkeyword('FEED'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
@@ -121,7 +120,7 @@ class Template:
             tnew_feed.putcol("SPECTRAL_WINDOW_ID", np.array([-1] * len(stations)))
             tnew_feed.putcol("TIME", np.array([5.e9] * len(stations)))
 
-        print("Add table ==> " + self.outname + "::ANTENNA")
+        # print("Add table ==> " + self.outname + "::ANTENNA")
 
         with table(self.ref_table.getkeyword('ANTENNA'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
@@ -140,7 +139,7 @@ class Template:
             tnew_ant.putcol("LOFAR_STATION_ID", ids)
             tnew_ant.putcol("LOFAR_PHASE_REFERENCE", phase_ref)
 
-        print("Add table ==> " + self.outname + "::LOFAR_ANTENNA_FIELD")
+        # print("Add table ==> " + self.outname + "::LOFAR_ANTENNA_FIELD")
 
         with table(self.ref_table.getkeyword('LOFAR_ANTENNA_FIELD'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
@@ -153,7 +152,7 @@ class Template:
                 taql(f"INSERT INTO {self.outname}::LOFAR_ANTENNA_FIELD SELECT FROM {ms}::LOFAR_ANTENNA_FIELD b WHERE b.ANTENNA_ID={ind}")
             tnew_field.putcol("ANTENNA_ID", np.array(range(len(stations))))
 
-        print("Add table ==> " + self.outname + "::LOFAR_STATION")
+        # print("Add table ==> " + self.outname + "::LOFAR_STATION")
 
         with table(self.ref_table.getkeyword('LOFAR_STATION'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
@@ -261,8 +260,6 @@ class Template:
                   f"\nThis is an expensive operation. So, be patient..")
 
             batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
-
-            print("Multithreading...")
 
             with ProcessPoolExecutor(max_workers=num_workers) as executor:
                 future_to_baseline = {
@@ -398,9 +395,6 @@ class Template:
 
             newdesc_data.pop('_keywords_')
 
-            pprint(newdesc_data)
-            print()
-
             # Make main table
             default_ms(self.outname, newdesc_data)
             with table(self.outname, readonly=False, ack=False) as tnew:
@@ -426,7 +420,7 @@ class Template:
                            'LOFAR_ELEMENT_FAILURE', 'OBSERVATION', 'POINTING',
                            'POLARIZATION', 'PROCESSOR', 'STATE']:
                 try:
-                    print("Add table ==> " + self.outname + "::" + subtbl)
+                    # print("Add table ==> " + self.outname + "::" + subtbl)
 
                     with table(self.tmpfile+"::"+subtbl, ack=False, readonly=False) as tsub:
                         tsub.copy(self.outname + '/' + subtbl, deep=True)
