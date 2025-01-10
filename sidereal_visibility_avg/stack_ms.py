@@ -134,7 +134,7 @@ class Stack:
 
                         if col == 'UVW':
 
-                            weights = np.tile(t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)[row_idxs, :, 0].mean(axis=1), 3).reshape(row_idxs, 3)
+                            weights = np.tile(t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)[row_idxs, :, 0].mean(axis=1), 3).reshape(len(row_idxs), 3)
 
                             new_data[row_idxs_new, :] += sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :] * weights, chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
                             uvw_weights[row_idxs_new, :] += sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], weights, chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
