@@ -133,8 +133,11 @@ class Stack:
                                     indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
-                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :], chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
-                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape), chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
+
+                            weights = t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)[row_idxs, :]
+
+                            new_data[row_idxs_new, :] += data[row_idxs, :] * weights #sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :], chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
+                            uvw_weights[row_idxs_new, :] += weights #sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape), chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
 
                             try:
                                 uvw_weights.flush()
@@ -142,7 +145,7 @@ class Stack:
                                 pass
 
                         else:
-                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :], chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
+                            new_data[np.ix_(row_idxs_new, freq_idxs)] += data[row_idxs, :] #sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :], chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
 
                         try:
                             new_data.flush()
