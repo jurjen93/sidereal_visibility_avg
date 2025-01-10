@@ -36,7 +36,7 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         target_chunk_size = total_memory / chunkmem
-        self.chunk_size = int(target_chunk_size * (1024 ** 3) / np.dtype(np.float128).itemsize/2/self.freq_len)
+        self.chunk_size = min(int(target_chunk_size * (1024 ** 3) / np.dtype(np.float128).itemsize/2/self.freq_len), 500_000)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
 
@@ -133,9 +133,8 @@ class Stack:
                                     indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
-                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :], chunk_size=min(100_000, self.chunk_size), n_jobs=max(self.num_cpus-2, 1))
-
-                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape), chunk_size=min(100_000, self.chunk_size), n_jobs=max(self.num_cpus-2, 1))
+                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :], chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
+                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape), chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
 
                             try:
                                 uvw_weights.flush()
@@ -143,7 +142,7 @@ class Stack:
                                 pass
 
                         else:
-                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :], chunk_size=min(100_000, self.chunk_size), n_jobs=max(self.num_cpus-2, 1))
+                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :], chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
 
                         try:
                             new_data.flush()
