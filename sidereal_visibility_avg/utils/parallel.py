@@ -9,7 +9,7 @@ from .ms_info import get_ms_content
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from multiprocessing import shared_memory
-from joblib.externals.loky import get_reusable_executor
+
 
 def parallel_sum(array1, array2, n_jobs=-1):
     """
