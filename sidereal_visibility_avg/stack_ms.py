@@ -133,9 +133,9 @@ class Stack:
                                     indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
-                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :], chunk_size=min(100_000, self.chunk_size))
+                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :], chunk_size=min(100_000, self.chunk_size), n_jobs=max(self.num_cpus-2, 1))
 
-                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape), chunk_size=min(100_000, self.chunk_size))
+                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], np.ones(uvw_weights[row_idxs_new, :].shape), chunk_size=min(100_000, self.chunk_size), n_jobs=max(self.num_cpus-2, 1))
 
                             try:
                                 uvw_weights.flush()
@@ -143,7 +143,7 @@ class Stack:
                                 pass
 
                         else:
-                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :], chunk_size=min(100_000, self.chunk_size))
+                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :], chunk_size=min(100_000, self.chunk_size), n_jobs=max(self.num_cpus-2, 1))
 
                         try:
                             new_data.flush()

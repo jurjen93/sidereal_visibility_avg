@@ -2,13 +2,14 @@ import numpy as np
 from joblib import Parallel, delayed
 import tempfile
 import json
-from os import path, cpu_count
+from os import path, cpu_count, unlink
 from glob import glob
 from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from multiprocessing import shared_memory
+from joblib.externals.loky import get_reusable_executor
 
 def parallel_sum(array1, array2, n_jobs=-1):
     """
@@ -65,59 +66,51 @@ def parallel_sum(array1, array2, n_jobs=-1):
     return result
 
 def sum_arrays_chunkwise(array1, array2, chunk_size=1_000_000, n_jobs=-1, un_memmap=True):
-    """
-    Sums two arrays in chunks using parallel processing.
 
-    :param:
-        - array1: np.ndarray or np.memmap
-        - array2: np.ndarray or np.memmap
-        - chunk_size: int, size of each chunk
-        - n_jobs: int, number of jobs for parallel processing (-1 means using all processors)
-        - un_memmap: bool, whether to convert memmap arrays to regular arrays if they fit in memory
-
-    :return:
-        - np.ndarray or np.memmap: result array which is the sum of array1 and array2
-    """
-
-    # Ensure the arrays have the same length
     assert len(array1) == len(array2), "Arrays must have the same length"
 
-    # Convert memmap arrays to regular arrays if `un_memmap` is True
     def try_unmemmap(array):
         if un_memmap and isinstance(array, np.memmap):
             try:
                 return np.array(array)
             except MemoryError:
-                pass  # Fall back to memmap if memory error occurs
+                pass
         return array
 
     array1 = try_unmemmap(array1)
     array2 = try_unmemmap(array2)
 
     n = len(array1)
-
-    # Determine the output storage type (memmap if input is memmap, else ndarray)
     if isinstance(array1, np.memmap) or isinstance(array2, np.memmap):
         temp_file = tempfile.NamedTemporaryFile(delete=False)
         result_array = np.memmap(temp_file.name, dtype=array1.dtype, mode='w+', shape=array1.shape)
     else:
         result_array = np.empty_like(array1)
 
-    # Define the chunk summation task
     def sum_chunk(start, end):
-        result_array[start:end] = array1[start:end] + array2[start:end]
+        return array1[start:end] + array2[start:end]
 
-    # Create chunk indices
-    chunk_indices = [(i, min(i + chunk_size, n)) for i in range(0, n, chunk_size)]
+    try:
+        chunk_indices = [(i, min(i + chunk_size, n)) for i in range(0, n, chunk_size)]
 
-    # Use joblib for parallel processing, favoring threads for memory-bound tasks
-    Parallel(n_jobs=n_jobs, prefer="threads")(delayed(sum_chunk)(start, end) for start, end in chunk_indices)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            results = Parallel(n_jobs=n_jobs, prefer="threads", temp_folder=temp_dir)(
+                delayed(sum_chunk)(start, end) for start, end in chunk_indices
+            )
 
-    # Flush changes to disk if using memmap
-    if isinstance(result_array, np.memmap):
-        result_array.flush()
+        for (start, end), chunk in zip(chunk_indices, results):
+            result_array[start:end] = chunk
 
-    return result_array
+        if isinstance(result_array, np.memmap):
+            result_array.flush()
+
+        return result_array
+    finally:
+        if isinstance(result_array, np.memmap):
+            unlink(temp_file.name)
+
+        # Ensure `loky` executor is shut down
+        get_reusable_executor().shutdown(wait=True)
 
 
 def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
