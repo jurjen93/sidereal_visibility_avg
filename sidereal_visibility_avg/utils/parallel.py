@@ -17,7 +17,9 @@ def sum_chunks(result, array1, array2, start_indices, end_indices):
     """
     for i in prange(len(start_indices)):
         start, end = start_indices[i], end_indices[i]
-        result[start:end] = array1[start:end] + array2[start:end]
+        for j in range(start, end):
+            result[j] = array1[j] + array2[j]  # Avoid slicing for better efficiency
+
 
 def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
     """
@@ -40,7 +42,7 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=T
 
     n = len(array1)
 
-    # Adjust chunk size for larger arrays
+    # Adjust chunk size for large arrays
     chunk_size = min(chunk_size, n)
 
     # Optionally convert memmap arrays to regular arrays
@@ -69,6 +71,7 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=T
     # Use Numba for summing chunks
     sum_chunks(result_array, array1, array2, start_indices, end_indices)
 
+    # If a temporary file was created, return the memmap; otherwise, return the array
     return result_array
 
 
