@@ -141,8 +141,11 @@ class Stack:
                                     indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
-
-                            weights = np.tile(t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)[row_idxs, :, 0].mean(axis=1), 3).reshape(len(row_idxs), 3)
+                            try:
+                                weights = np.tile(t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)[row_idxs, :, 0].mean(axis=1), 3).reshape(len(row_idxs), 3)
+                            except IndexError:
+                                print("Issues with UVW_weights, continue with ones") #TODO:??
+                                weights = np.ones(data[row_idxs, :].shape)
 
                             new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :],
                                                                              data[row_idxs, :] * weights,

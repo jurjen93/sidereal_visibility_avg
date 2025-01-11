@@ -116,26 +116,35 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
     # Determine optimal batch size
     batch_size = max(len(uniq_ant_pairs) // (cpu_count() * 2), 1)  # Split tasks across all cores
 
-    n_jobs = max(cpu_count() - 3, 1)  # Use all available CPU cores
+    n_jobs = max(cpu_count() - 5, 1)
 
     try:
         with ProcessPoolExecutor(max_workers=n_jobs) as executor:
             # Submit batches of antenna pairs for parallel processing
             futures = [
-                executor.submit(process_antpair_batch, uniq_ant_pairs[i:i + batch_size], antennas, ref_antennas, time_idxs)
+                executor.submit(
+                    process_antpair_batch,
+                    uniq_ant_pairs[i:i + batch_size],
+                    antennas,
+                    ref_antennas,
+                    time_idxs
+                )
                 for i in range(0, len(uniq_ant_pairs), batch_size)
             ]
 
             for future in as_completed(futures):
-                mapping_batch = future.result()
-                # Write the JSON mappings after processing each batch
-                for antpair, mapping in mapping_batch.items():
-                    file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
-                    with open(file_path, 'w') as f:
-                        json.dump(mapping, f)
+                try:
+                    mapping_batch = future.result()
+                    # Write the JSON mappings after processing each batch
+                    for antpair, mapping in mapping_batch.items():
+                        file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
+                        with open(file_path, 'w') as f:
+                            json.dump(mapping, f)
+                except Exception as batch_error:
+                    print(f"Error processing a batch: {batch_error}")
 
     except Exception as e:
-        print(f"An error occurred while writing the mappings: {e}")
+        print(f"An error occurred while processing or writing mappings: {e}")
 
 
 def process_ms(ms):
