@@ -9,6 +9,7 @@ from .ms_info import get_ms_content
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from numba import njit, prange
+import time
 
 @njit(parallel=True)
 def sum_chunks(result, array1, array2, start_indices, end_indices):
@@ -21,7 +22,7 @@ def sum_chunks(result, array1, array2, start_indices, end_indices):
             result[j] = array1[j] + array2[j]  # Avoid slicing for better efficiency
 
 
-def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
+def sum_arrays_chunkwise(array1, array2, chunk_size=1000, un_memmap=True):
     """
     Sums two arrays in chunks using joblib for parallel processing.
 
@@ -35,6 +36,8 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=T
     :return:
         - np.ndarray or np.memmap: result array which is the sum of array1 and array2
     """
+
+    start_time = time.perf_counter()
 
     # Ensure arrays have the same length
     if len(array1) != len(array2):
@@ -72,6 +75,13 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=T
     sum_chunks(result_array, array1, array2, start_indices, end_indices)
 
     # If a temporary file was created, return the memmap; otherwise, return the array
+
+    # End time
+    end_time = time.perf_counter()
+
+    # Elapsed time
+    elapsed_time = end_time - start_time
+    print(f"Elapsed time: {elapsed_time:.6f} seconds")
     return result_array
 
 
