@@ -8,62 +8,16 @@ from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
-from multiprocessing import shared_memory
+from numba import njit, prange
 
-
-def parallel_sum(array1, array2, n_jobs=-1):
+@njit(parallel=True)
+def sum_chunks(result, array1, array2, start_indices, end_indices):
     """
-    Sums two arrays in parallel across all available CPU cores using shared memory.
-
-    Parameters:
-    array1 (numpy.ndarray): First input array.
-    array2 (numpy.ndarray): Second input array.
-    n_jobs (int): Number of parallel jobs. Default is -1 (use all available cores).
-
-    Returns:
-    numpy.ndarray: Element-wise sum of the two arrays.
+    Numba-compiled function to sum chunks of arrays.
     """
-    # Ensure inputs are NumPy arrays
-    array1 = np.asarray(array1, dtype=np.float64)
-    array2 = np.asarray(array2, dtype=np.float64)
-    n = len(array1)
-
-    # Create shared memory
-    shm1 = shared_memory.SharedMemory(create=True, size=array1.nbytes)
-    shm2 = shared_memory.SharedMemory(create=True, size=array2.nbytes)
-    shm_out = shared_memory.SharedMemory(create=True, size=array1.nbytes)
-
-    # Copy data into shared memory
-    shared_array1 = np.ndarray(array1.shape, dtype=array1.dtype, buffer=shm1.buf)
-    shared_array2 = np.ndarray(array2.shape, dtype=array2.dtype, buffer=shm2.buf)
-    shared_output = np.ndarray(array1.shape, dtype=array1.dtype, buffer=shm_out.buf)
-    np.copyto(shared_array1, array1)
-    np.copyto(shared_array2, array2)
-
-    # Chunk processing function
-    def sum_chunk(start, end):
-        shared_output[start:end] = shared_array1[start:end] + shared_array2[start:end]
-
-    # Determine chunk size
-    chunk_size = n // n_jobs + 1
-
-    # Parallel processing
-    Parallel(n_jobs=n_jobs)(
-        delayed(sum_chunk)(i, min(i + chunk_size, n)) for i in range(0, n, chunk_size)
-    )
-
-    # Collect result
-    result = shared_output.copy()
-
-    # Cleanup shared memory
-    shm1.close()
-    shm1.unlink()
-    shm2.close()
-    shm2.unlink()
-    shm_out.close()
-    shm_out.unlink()
-
-    return result
+    for i in prange(len(start_indices)):
+        start, end = start_indices[i], end_indices[i]
+        result[start:end] = array1[start:end] + array2[start:end]
 
 def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=True):
     """
@@ -80,40 +34,40 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=1000, n_jobs=-1, un_memmap=T
         - np.ndarray or np.memmap: result array which is the sum of array1 and array2
     """
 
-    # Ensure the arrays have the same length
-    assert len(array1) == len(array2), "Arrays must have the same length"
-
-    # Check if un-memmap is needed and feasible
-    if un_memmap and isinstance(array1, np.memmap):
-        try:
-            array1 = np.array(array1)
-        except MemoryError:
-            pass  # If memory error, fall back to using memmap
-
-    if un_memmap and isinstance(array2, np.memmap):
-        try:
-            array2 = np.array(array2)
-        except MemoryError:
-            pass  # If memory error, fall back to using memmap
+    # Ensure arrays have the same length
+    if len(array1) != len(array2):
+        raise ValueError("Arrays must have the same length")
 
     n = len(array1)
 
-    # Determine the output storage type based on input type
+    # Adjust chunk size for larger arrays
+    chunk_size = min(chunk_size, n)
+
+    # Optionally convert memmap arrays to regular arrays
+    def try_convert_to_array(arr):
+        if un_memmap and isinstance(arr, np.memmap):
+            try:
+                return np.array(arr)
+            except MemoryError:
+                return arr  # Fallback to memmap
+        return arr
+
+    array1 = try_convert_to_array(array1)
+    array2 = try_convert_to_array(array2)
+
+    # Determine result array type
     if isinstance(array1, np.memmap) or isinstance(array2, np.memmap):
-        # Create a temporary file to store the result as a memmap
         temp_file = tempfile.NamedTemporaryFile(delete=False)
         result_array = np.memmap(temp_file.name, dtype=array1.dtype, mode='w+', shape=array1.shape)
     else:
         result_array = np.empty_like(array1)
 
-    def sum_chunk_to_result(start, end):
-        result_array[start:end] = array1[start:end] + array2[start:end]
+    # Create chunk indices
+    start_indices = np.arange(0, n, chunk_size)
+    end_indices = np.minimum(start_indices + chunk_size, n)
 
-    # Create a generator for chunk indices
-    chunks = ((i, min(i + chunk_size, n)) for i in range(0, n, chunk_size))
-
-    # Parallel processing with threading preferred for better I/O handling
-    Parallel(n_jobs=n_jobs, prefer="threads")(delayed(sum_chunk_to_result)(start, end) for start, end in chunks)
+    # Use Numba for summing chunks
+    sum_chunks(result_array, array1, array2, start_indices, end_indices)
 
     return result_array
 

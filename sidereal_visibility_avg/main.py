@@ -30,6 +30,8 @@ def parse_args():
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template')
     parser.add_argument('--interpolate_uvw', action='store_true', help='Interpolate UVW with nearest neighbours')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging)')
+    parser.add_argument('--skip_uvw_mapping', action='store_true', help='Do not adjust UVW mapping (needs --keep_mapping from earlier run)')
+    parser.add_argument('--tmp', type=str, help='Temporary storage folder', default='.')
 
     return parser.parse_args()
 
@@ -67,18 +69,20 @@ def main():
         time_res = None
         print(f"Additional time sampling factor {avg}\n")
 
-    t = Template(args.msin, args.msout)
+    t = Template(args.msin, args.msout, tmp_folder=args.tmp)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg)
     if args.interpolate_uvw:
         t.interpolate_uvw()
-    else:
+    elif not args.skip_uvw_mapping:
         t.calculate_uvw()
+    else:
+        print('--skip_uvw_mapping requested --> use already existing mapping files')
     print("\n############\nTemplate creation completed\n############")
 
     # Stack MS
     if not args.make_only_template:
         start_time = time.time()
-        s = Stack(args.msin, args.msout)
+        s = Stack(args.msin, args.msout, tmp_folder=args.tmp)
         s.stack_all(interpolate_uvw=args.interpolate_uvw, safe_mem=args.safe_memory)
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -87,7 +91,7 @@ def main():
     # Clean up mapping files
     if not args.keep_mapping:
         clean_mapping_files(args.msin)
-    clean_binary_files()
+    clean_binary_files(args.tmp)
 
     # Apply dysco compression
     if args.dysco:

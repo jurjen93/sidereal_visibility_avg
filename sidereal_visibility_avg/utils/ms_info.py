@@ -3,6 +3,7 @@ import numpy as np
 from .lst import mjd_seconds_to_lst_seconds_single
 from sys import exit
 import psutil
+import gc
 
 
 def same_phasedir(mslist: list = None):
@@ -158,7 +159,7 @@ def make_ant_pairs(n_ant, n_time):
     return antenna1, antenna2
 
 
-def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = None, noRAM: bool = None):
+def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = None, noRAM: bool = None, tmp_folder: str = '.'):
     """
     Get data arrays (new data and weights)
 
@@ -167,14 +168,18 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
         - nrows: number of rows
         - freq_len: frequency axis length
         - noRAM: if concerned about RAM, always use memmaps for DATA and WEIGHT_SPECTRUM
+        - tmp_folder: temporary storage folder
 
     :return:
         - new_data: new data array (empty array with correct shape)
         - weights: weights corresponding to new data array (empty array with correct shape)
     """
 
-    tmpfilename = column.lower() + '.tmp.dat'
-    tmpfilename_weights = column.lower() + '_weights.tmp.dat'
+    tmpfilename = tmp_folder+column.lower() + '.tmp.dat'
+    tmpfilename_weights = tmp_folder+column.lower() + '_weights.tmp.dat'
+
+    if tmp_folder[-1] != '/':
+        tmp_folder += '/'
 
     if column in ['UVW']:
         weights_shape = (nrows, 3)
@@ -211,56 +216,11 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
         if noRAM:
             print(f'\n--safe_memory requested, because concerned about RAM? --> Use memmap for {column}')
         else:
-            print(f"\n{column}_size ({data_size}) > Available Memory ({available_memory/4}) --> Use memmap")
+            print(f"\n{column}_size ({data_size}) > Available Memory ({available_memory//4}) --> Use memmap")
         new_data = np.memmap(tmpfilename, dtype=dtp, mode='w+', shape=shape)
     else:
-        print(f"\n{column}_size ({data_size}) < Available Memory ({available_memory/4}) --> Load data in RAM")
+        gc.collect()
+        print(f"\n{column}_size ({data_size}) < Available Memory ({available_memory//4}) --> Load data in RAM")
         new_data = np.zeros(shape, dtype=dtp)
-
-    return new_data, weights
-
-
-def get_data_arrays_old(column: str = 'DATA', nrows: int = None, freq_len: int = None):
-    """
-    Get data arrays (new data and weights)
-
-    :param:
-        - column: column name (DATA, WEIGHT_SPECTRUM, WEIGHT, OR UVW)
-        - nrows: number of rows
-        - freq_len: frequency axis length
-
-    :return:
-        - new_data: new data array (empty array with correct shape)
-        - weights: weights corresponding to new data array (empty array with correct shape)
-    """
-
-    tmpfilename = column.lower()+'.tmp.dat'
-    tmpfilename_weights = column.lower()+'_weights.tmp.dat'
-
-    if column in ['UVW']:
-        weights = np.memmap(tmpfilename_weights, dtype=np.float16, mode='w+', shape=(nrows, 3))
-        weights[:] = 0
-    else:
-        weights = None
-
-    if column in ['DATA', 'WEIGHT_SPECTRUM']:
-        if column == 'DATA':
-            dtp = np.complex64
-        elif column == 'WEIGHT_SPECTRUM':
-            dtp = np.float32
-        else:
-            dtp = np.float32
-        shape = (nrows, freq_len, 4)
-
-    elif column == 'WEIGHT':
-        shape, dtp = (nrows, freq_len), np.float32
-
-    elif column == 'UVW':
-        shape, dtp = (nrows, 3), np.float32
-
-    else:
-        exit("ERROR: Use only DATA, WEIGHT_SPECTRUM, WEIGHT, or UVW")
-
-    new_data = np.memmap(tmpfilename, dtype=dtp, mode='w+', shape=shape)
 
     return new_data, weights

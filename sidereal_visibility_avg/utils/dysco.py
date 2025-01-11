@@ -50,7 +50,8 @@ def compress(ms):
 
         print('Apply Dysco compression')
 
-        cmd = f"DP3 msin={ms} msout={ms}.tmp msout.overwrite=true msout.storagemanager=dysco"
+        cmd = (f"DP3 msin={ms} msout={ms}.tmp msout.overwrite=true msout.storagemanager=dysco "
+               f"msout.storagemanager.databitrate=12 msout.storagemanager.weightbitrate=12")
 
         steps = []
 

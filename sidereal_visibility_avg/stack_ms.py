@@ -1,6 +1,6 @@
 from casacore.tables import table, taql
 import numpy as np
-from os import path
+from os import path, remove
 import sys
 import psutil
 from glob import glob
@@ -9,15 +9,16 @@ from scipy.ndimage import gaussian_filter1d
 from .utils.arrays_and_lists import find_closest_index_list
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
-from .utils.parallel import sum_arrays_chunkwise, parallel_sum
+from .utils.parallel import sum_arrays_chunkwise
 from .utils.printing import print_progress_bar
+from .utils.clean import clean_binary_file
 
 
 class Stack:
     """
     Stack measurement sets in template empty.ms
     """
-    def __init__(self, msin: list = None, outname: str = 'empty.ms', chunkmem: float = 1.):
+    def __init__(self, msin: list = None, outname: str = 'empty.ms', chunkmem: float = 1., tmp_folder: str = '.'):
         if not path.exists(outname):
             sys.exit(f"ERROR: Template {outname} has not been created or is deleted")
         print("\n\n==== Start stacking ====\n")
@@ -36,9 +37,12 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         total_memory /= chunkmem
-        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/4/self.freq_len), 500_000)
+        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/4/self.freq_len), 1_000_000)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
+        self.tmp_folder = tmp_folder
+        if self.tmp_folder[-1]!='/':
+            self.tmp_folder+='/'
 
     def smooth_uvw(self):
         """
@@ -57,7 +61,7 @@ class Stack:
         for idx_b, baseline in enumerate(baselines):
             print_progress_bar(idx_b, len(baselines))
             idxs = []
-            for baseline_json in glob(f"*baseline_mapping/{baseline[0]}-{baseline[1]}.json"):
+            for baseline_json in glob(self.tmp_folder+f"*baseline_mapping/{baseline[0]}-{baseline[1]}.json"):
                 idxs += list(load_json(baseline_json).values())
             sorted_indices = np.argsort(time[idxs])
             for i in range(3):
@@ -91,9 +95,9 @@ class Stack:
             for col in columns:
 
                 if col == 'UVW':
-                    new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len)
+                    new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, tmp_folder=self.tmp_folder)
                 else:
-                    new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, noRAM=safe_mem)
+                    new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, noRAM=safe_mem, tmp_folder=self.tmp_folder)
 
                 # Loop over measurement sets
                 for ms in self.mslist:
@@ -116,10 +120,13 @@ class Stack:
                         f.close()
 
                     # Make antenna mapping in parallel
-                    mapping_folder = ms + '_baseline_mapping'
+                    mapping_folder = self.tmp_folder + ms + '_baseline_mapping'
 
                     print('Read mapping')
                     indices, ref_indices = read_mapping(mapping_folder)
+
+                    if len(indices)==0:
+                        sys.exit('ERROR: cannot find *_baseline_mapping folders')
 
                     # Chunked stacking!
                     chunks = len(indices)//self.chunk_size + 1
@@ -137,8 +144,8 @@ class Stack:
 
                             weights = np.tile(t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)[row_idxs, :, 0].mean(axis=1), 3).reshape(len(row_idxs), 3)
 
-                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :] * weights, chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
-                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], weights, chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
+                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :], data[row_idxs, :] * weights, chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1), un_memmap=False)
+                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :], weights, chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1), un_memmap=False)
 
                             try:
                                 uvw_weights.flush()
@@ -146,12 +153,14 @@ class Stack:
                                 pass
 
                         else:
-                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)], data[row_idxs, :], chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1))
+                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)],
+                                                                                             data[row_idxs, :],
+                                                                                             chunk_size=self.chunk_size//self.num_cpus, n_jobs=max(self.num_cpus-2, 1), un_memmap=False)
 
-                        try:
-                            new_data.flush()
-                        except AttributeError:
-                            pass
+                    try:
+                        new_data.flush()
+                    except AttributeError:
+                        pass
 
                     print_progress_bar(chunk_idx, chunks)
                     t.close()
@@ -166,6 +175,10 @@ class Stack:
                     start = chunk_idx * self.chunk_size
                     end = min(start + self.chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
                     self.T.putcol(col, new_data[start:end], startrow=start, nrow=end - start)
+
+                # clean up
+                clean_binary_file(self.tmp_folder + col.lower() + '.tmp.dat')
+
 
         # ADD FLAG
         print(f'Put column FLAG')

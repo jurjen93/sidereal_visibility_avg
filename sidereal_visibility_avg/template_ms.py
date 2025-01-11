@@ -18,12 +18,15 @@ from .utils.printing import print_progress_bar
 
 class Template:
     """Make template measurement set based on input measurement sets"""
-    def __init__(self, msin: list = None, outname: str = 'empty.ms'):
+    def __init__(self, msin: list = None, outname: str = 'empty.ms', tmp_folder: str = '.'):
         self.mslist = msin
         self.outname = outname
 
         # Time offset to sidereal day from output MS
         self._time_lst_offset = None
+        self.tmp_folder = tmp_folder
+        if self.tmp_folder[-1]!='/':
+            self.tmp_folder+='/'
 
     @property
     def time_lst_offset(self):
@@ -178,7 +181,7 @@ class Template:
             with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(ms)} ORDER BY TIME") as t:
 
                 # Mapping folder for the current MS
-                mapping_folder = ms + '_baseline_mapping'
+                mapping_folder = self.tmp_folder + ms + '_baseline_mapping'
 
                 if not check_folder_exists(mapping_folder):
                     makedirs(mapping_folder, exist_ok=False)
@@ -231,14 +234,14 @@ class Template:
             baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
 
         with table(self.outname, readonly=False, ack=False) as T:
-            UVW = np.memmap('UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
-            TIME = np.memmap('TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
+            UVW = np.memmap(self.tmp_folder+'UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
+            TIME = np.memmap(self.tmp_folder+'TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
             TIME[:] = T.getcol("TIME")
 
             for ms_idx, ms in enumerate(sorted(self.mslist)):
                 with table(ms, ack=False) as f:
-                    uvw = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
-                    time = np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
+                    uvw = np.memmap(self.tmp_folder+f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                    time = np.memmap(self.tmp_folder+f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
 
                     uvw[:] = f.getcol("UVW")
                     time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
@@ -279,9 +282,9 @@ class Template:
         with table(self.outname + "::ANTENNA", ack=False) as ants:
             baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
 
-        if not path.exists('UVW.tmp.dat'):
+        if not path.exists(self.tmp_folder+'UVW.tmp.dat'):
             with table(self.outname, readonly=False, ack=False) as T:
-                UVW = np.memmap('UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
+                UVW = np.memmap(self.tmp_folder+'UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
                 with table(self.outname, ack=False) as T:
                     UVW[:] = T.getcol("UVW")
 
@@ -291,7 +294,7 @@ class Template:
                         uvw[:] = f.getcol("UVW")
 
         else:
-            UVW = np.memmap('UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
+            UVW = np.memmap(self.tmp_folder+'UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
 
         num_workers = min(cpu_count()-3, len(baselines))
 
