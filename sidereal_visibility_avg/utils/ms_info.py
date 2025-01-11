@@ -183,7 +183,7 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
 
     if column in ['UVW']:
         weights_shape = (nrows, 3)
-        weights_dtype = np.float16
+        weights_dtype = np.float32
         weights_size = np.prod(weights_shape) * np.dtype(weights_dtype).itemsize
         available_memory = psutil.virtual_memory().available
 

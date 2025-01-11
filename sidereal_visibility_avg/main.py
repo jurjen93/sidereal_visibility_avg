@@ -20,18 +20,18 @@ def parse_args():
     """
 
     parser = ArgumentParser(description='Sidereal visibility averaging')
-    parser.add_argument('msin', nargs='+', help='Measurement sets to combine')
-    parser.add_argument('--msout', type=str, default='empty.ms', help='Measurement set output name')
-    parser.add_argument('--time_res', type=float, help='Desired time resolution in seconds')
-    parser.add_argument('--resolution', type=float, help='Desired spatial resolution (if given, you also have to give --fov_diam)')
+    parser.add_argument('msin', nargs='+', help='Measurement sets to combine.')
+    parser.add_argument('--msout', type=str, default='empty.ms', help='Measurement set output name.')
+    parser.add_argument('--time_res', type=float, help='Desired time resolution in seconds.')
+    parser.add_argument('--resolution', type=float, help='Desired spatial resolution (if given, you also have to give --fov_diam).')
     parser.add_argument('--fov_diam', type=float, help='Desired field of view diameter in degrees. This is used to calculate the optimal time resolution.')
-    parser.add_argument('--dysco', action='store_true', help='Dysco compression of data')
-    parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM (slower but safer if concerned)')
-    parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template')
-    parser.add_argument('--interpolate_uvw', action='store_true', help='Interpolate UVW with nearest neighbours')
-    parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging)')
-    parser.add_argument('--skip_uvw_mapping', action='store_true', help='Do not adjust UVW mapping (needs --keep_mapping from earlier run)')
-    parser.add_argument('--tmp', type=str, help='Temporary storage folder', default='.')
+    parser.add_argument('--dysco', action='store_true', help='Dysco compression of data.')
+    parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM storage (slower but less RAM cost if concerned).')
+    parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template.')
+    parser.add_argument('--interpolate_uvw', action='store_true', help='Interpolate UVW with nearest neighbours.')
+    parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')
+    parser.add_argument('--skip_uvw_mapping', action='store_true', help='Do not adjust UVW mapping (needs --keep_mapping from earlier run).')
+    parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
 
     return parser.parse_args()
 
@@ -71,12 +71,12 @@ def main():
 
     t = Template(args.msin, args.msout, tmp_folder=args.tmp)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg)
-    if args.interpolate_uvw:
-        t.interpolate_uvw()
-    elif not args.skip_uvw_mapping:
-        t.calculate_uvw()
-    else:
+    if args.skip_uvw_mapping:
         print('--skip_uvw_mapping requested --> use already existing mapping files')
+    elif args.interpolate_uvw:
+        t.interpolate_uvw()
+    else:
+        t.calculate_uvw()
     print("\n############\nTemplate creation completed\n############")
 
     # Stack MS
