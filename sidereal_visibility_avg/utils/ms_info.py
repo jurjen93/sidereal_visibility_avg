@@ -159,7 +159,7 @@ def make_ant_pairs(n_ant, n_time):
     return antenna1, antenna2
 
 
-def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = None, noRAM: bool = None, tmp_folder: str = '.'):
+def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = None, always_memmap: bool = None, tmp_folder: str = '.'):
     """
     Get data arrays (new data and weights)
 
@@ -167,7 +167,7 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
         - column: column name (DATA, WEIGHT_SPECTRUM, WEIGHT, OR UVW)
         - nrows: number of rows
         - freq_len: frequency axis length
-        - noRAM: if concerned about RAM, always use memmaps for DATA and WEIGHT_SPECTRUM
+        - always_memmap: if concerned about RAM, always use memmaps for DATA and WEIGHT_SPECTRUM
         - tmp_folder: temporary storage folder
 
     :return:
@@ -212,8 +212,8 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
     data_size = np.prod(shape) * np.dtype(dtp).itemsize
     available_memory = psutil.virtual_memory().available
 
-    if data_size > available_memory / 4 or noRAM:
-        if noRAM:
+    if data_size > available_memory / 4 or always_memmap:
+        if always_memmap:
             print(f'\n--safe_memory requested, because concerned about RAM? --> Use memmap for {column}')
         else:
             print(f"\n{column}_size ({data_size}) > Available Memory ({available_memory//4}) --> Use memmap")
