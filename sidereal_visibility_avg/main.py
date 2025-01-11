@@ -25,8 +25,8 @@ def parse_args():
     parser.add_argument('--time_res', type=float, help='Desired time resolution in seconds')
     parser.add_argument('--resolution', type=float, help='Desired spatial resolution (if given, you also have to give --fov_diam)')
     parser.add_argument('--fov_diam', type=float, help='Desired field of view diameter in degrees. This is used to calculate the optimal time resolution.')
-    parser.add_argument('--chunk_mem', type=float, default=1., help='Additional memory chunk parameter (larger for smaller chunks)')
     parser.add_argument('--dysco', action='store_true', help='Dysco compression of data')
+    parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM (slower but safer if concerned)')
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template')
     parser.add_argument('--interpolate_uvw', action='store_true', help='Interpolate UVW with nearest neighbours')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging)')
@@ -78,7 +78,7 @@ def main():
     # Stack MS
     if not args.make_only_template:
         start_time = time.time()
-        s = Stack(args.msin, args.msout, chunkmem=args.chunk_mem)
+        s = Stack(args.msin, args.msout)
         s.stack_all(interpolate_uvw=args.interpolate_uvw)
         end_time = time.time()
         elapsed_time = end_time - start_time

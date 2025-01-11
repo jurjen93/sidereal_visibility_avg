@@ -158,7 +158,7 @@ def make_ant_pairs(n_ant, n_time):
     return antenna1, antenna2
 
 
-def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = None):
+def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = None, noRAM: bool = None):
     """
     Get data arrays (new data and weights)
 
@@ -166,6 +166,7 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
         - column: column name (DATA, WEIGHT_SPECTRUM, WEIGHT, OR UVW)
         - nrows: number of rows
         - freq_len: frequency axis length
+        - noRAM: if concerned about RAM, always use memmaps for DATA and WEIGHT_SPECTRUM
 
     :return:
         - new_data: new data array (empty array with correct shape)
@@ -191,7 +192,7 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
         weights = None
 
     if column in ['DATA', 'WEIGHT_SPECTRUM']:
-        dtp = np.complex128 if column == 'DATA' else np.float32
+        dtp = np.complex64 if column == 'DATA' else np.float32
         shape = (nrows, freq_len, 4)
 
     elif column == 'WEIGHT':
@@ -206,9 +207,14 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
     data_size = np.prod(shape) * np.dtype(dtp).itemsize
     available_memory = psutil.virtual_memory().available
 
-    if data_size > available_memory / 4:
+    if data_size > available_memory / 4 or noRAM:
+        if noRAM:
+            print(f'Concerned about RAM, using memmap for {column}')
+        else:
+            print(f"{column}_size ({data_size}) > Available Memory ({available_memory/4}) --> Use memmap")
         new_data = np.memmap(tmpfilename, dtype=dtp, mode='w+', shape=shape)
     else:
+        print(f"{column}_size ({data_size}) < Available Memory ({available_memory/4}) --> Load data in RAM")
         new_data = np.zeros(shape, dtype=dtp)
 
     return new_data, weights
@@ -239,7 +245,7 @@ def get_data_arrays_old(column: str = 'DATA', nrows: int = None, freq_len: int =
 
     if column in ['DATA', 'WEIGHT_SPECTRUM']:
         if column == 'DATA':
-            dtp = np.complex128
+            dtp = np.complex64
         elif column == 'WEIGHT_SPECTRUM':
             dtp = np.float32
         else:
