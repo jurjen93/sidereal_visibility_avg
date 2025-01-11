@@ -21,7 +21,6 @@ def sum_chunks(result, array1, array2, start_indices, end_indices):
             result[j] = array1[j] + array2[j]  # Avoid slicing for better efficiency
 
 
-
 def sum_arrays_chunkwise(array1, array2, chunk_size=100_000, un_memmap=True):
     """
     Sums two arrays in chunks using numba for efficient processing.
@@ -76,10 +75,7 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=100_000, un_memmap=True):
     # Use Numba for summing chunks
     sum_chunks(result_array_flat, array1_flat, array2_flat, start_indices, end_indices)
 
-    # Reshape the result back to the original shape
-    result_array = result_array_flat.reshape(original_shape)
-
-    return result_array
+    return result_array_flat.reshape(original_shape)
 
 
 def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):

@@ -102,7 +102,7 @@ class Stack:
                 # Loop over measurement sets
                 for ms in self.mslist:
 
-                    print(f'\nStacking {col}: {ms}')
+                    print(f'\n{col} :: {ms}')
 
                     # Open MS table
                     if col == 'DATA':
@@ -112,6 +112,8 @@ class Stack:
                     else:
                         t = taql(f"SELECT {col} FROM {path.abspath(ms)} ORDER BY TIME")
 
+                    print("TAQL query finished")
+
                     # Get freqs offset
                     if col != 'UVW':
                         f = table(ms+'::SPECTRAL_WINDOW', ack=False)
@@ -119,10 +121,12 @@ class Stack:
                         freq_idxs = find_closest_index_list(freqs, self.ref_freqs)
                         f.close()
 
+                    print('Collect relevant frequencies')
+
                     # Make antenna mapping in parallel
                     mapping_folder = self.tmp_folder + ms + '_baseline_mapping'
 
-                    print('Read mapping')
+                    print('Read baseline mapping')
                     indices, ref_indices = read_mapping(mapping_folder)
 
                     if len(indices)==0:
@@ -142,17 +146,18 @@ class Stack:
 
                         if col == 'UVW':
                             try:
-                                weights = np.tile(t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)[row_idxs, :, 0].mean(axis=1), 3).reshape(len(row_idxs), 3)
+                                weights = t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                                weights = np.tile(weights[row_idxs, :, 0].mean(axis=1), 3).reshape(len(row_idxs), 3)
                             except IndexError:
-                                print("Issues with UVW_weights, continue with ones") #TODO:??
+                                print("Issues with UVW_weights, continue with ones")
                                 weights = np.ones(data[row_idxs, :].shape)
 
                             new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :],
                                                                              data[row_idxs, :] * weights,
-                                                                             chunk_size=self.chunk_size//(self.num_cpus*4))
+                                                                             chunk_size=min(self.chunk_size, 1_000_000))
                             uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :],
                                                                                 weights,
-                                                                                chunk_size=self.chunk_size//(self.num_cpus*4))
+                                                                                chunk_size=min(self.chunk_size, 1_000_000))
 
                             try:
                                 uvw_weights.flush()
@@ -162,7 +167,7 @@ class Stack:
                         else:
                             new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)],
                                                                                              data[row_idxs, :],
-                                                                                             chunk_size=self.chunk_size//(self.num_cpus*4))
+                                                                                             chunk_size=min(self.chunk_size, 1_000_000))
 
                     try:
                         new_data.flush()
