@@ -21,26 +21,31 @@ def sum_chunks(result, array1, array2, start_indices, end_indices):
             result[j] = array1[j] + array2[j]  # Avoid slicing for better efficiency
 
 
+
 def sum_arrays_chunkwise(array1, array2, chunk_size=100_000, un_memmap=True):
     """
-    Sums two arrays in chunks using joblib for parallel processing.
+    Sums two arrays in chunks using numba for efficient processing.
 
     :param:
         - array1: np.ndarray or np.memmap
         - array2: np.ndarray or np.memmap
         - chunk_size: int, size of each chunk
-        - n_jobs: int, number of jobs for parallel processing (-1 means using all processors)
         - un_memmap: bool, whether to convert memmap arrays to regular arrays if they fit in memory
 
     :return:
         - np.ndarray or np.memmap: result array which is the sum of array1 and array2
     """
 
-    # Ensure arrays have the same length
-    if len(array1) != len(array2):
-        raise ValueError("Arrays must have the same length")
+    # Ensure arrays have the same shape
+    if array1.shape != array2.shape:
+        raise ValueError("Arrays must have the same shape")
 
-    n = len(array1)
+    original_shape = array1.shape
+    n = array1.size  # Flattened length
+
+    # Flatten the arrays
+    array1_flat = array1.ravel()
+    array2_flat = array2.ravel()
 
     # Adjust chunk size for large arrays
     chunk_size = min(chunk_size, n)
@@ -54,24 +59,26 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=100_000, un_memmap=True):
                 return arr  # Fallback to memmap
         return arr
 
-    array1 = try_convert_to_array(array1)
-    array2 = try_convert_to_array(array2)
+    array1_flat = try_convert_to_array(array1_flat)
+    array2_flat = try_convert_to_array(array2_flat)
 
     # Determine result array type
-    if isinstance(array1, np.memmap) or isinstance(array2, np.memmap):
+    if isinstance(array1_flat, np.memmap) or isinstance(array2_flat, np.memmap):
         temp_file = tempfile.NamedTemporaryFile(delete=False)
-        result_array = np.memmap(temp_file.name, dtype=array1.dtype, mode='w+', shape=array1.shape)
+        result_array_flat = np.memmap(temp_file.name, dtype=array1_flat.dtype, mode='w+', shape=array1_flat.shape)
     else:
-        result_array = np.empty_like(array1)
+        result_array_flat = np.empty_like(array1_flat)
 
     # Create chunk indices
     start_indices = np.arange(0, n, chunk_size)
     end_indices = np.minimum(start_indices + chunk_size, n)
 
     # Use Numba for summing chunks
-    sum_chunks(result_array, array1, array2, start_indices, end_indices)
+    sum_chunks(result_array_flat, array1_flat, array2_flat, start_indices, end_indices)
 
-    # If a temporary file was created, return the memmap; otherwise, return the array
+    # Reshape the result back to the original shape
+    result_array = result_array_flat.reshape(original_shape)
+
     return result_array
 
 
