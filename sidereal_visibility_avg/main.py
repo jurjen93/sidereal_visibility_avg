@@ -79,7 +79,7 @@ def main():
     if not args.make_only_template:
         start_time = time.time()
         s = Stack(args.msin, args.msout)
-        s.stack_all(interpolate_uvw=args.interpolate_uvw)
+        s.stack_all(interpolate_uvw=args.interpolate_uvw, safe_mem=args.safe_memory)
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Elapsed time for stacking: {elapsed_time} seconds")

@@ -66,13 +66,14 @@ class Stack:
         self.T.putcol('UVW', uvw)
 
 
-    def stack_all(self, column: str = 'DATA', interpolate_uvw: bool = False):
+    def stack_all(self, column: str = 'DATA', interpolate_uvw: bool = False, safe_mem: bool = False):
         """
         Stack all MS
 
         :param:
             - column: column name (currently only DATA)
             - interpolate_uvw: interpolate uvw coordinates (nearest neightbour + weighted average)
+            - safe_mem: use always memmap for DATA and WEIGHT_SPECTRUM
         """
 
         if column == 'DATA':
@@ -92,7 +93,7 @@ class Stack:
                 if col == 'UVW':
                     new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len)
                 else:
-                    new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len)
+                    new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, noRAM=safe_mem)
 
                 # Loop over measurement sets
                 for ms in self.mslist:
