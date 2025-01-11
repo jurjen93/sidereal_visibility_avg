@@ -13,26 +13,21 @@ from numba import njit, prange
 @njit(parallel=True)
 def sum_chunks(result, array1, array2, start_indices, end_indices):
     """
-    Numba-compiled function to sum chunks of arrays.
+    Numba-compiled function to sum chunks of arrays using slicing for efficiency.
     """
     for i in prange(len(start_indices)):
         start, end = start_indices[i], end_indices[i]
-        for j in range(start, end):
-            result[j] = array1[j] + array2[j]  # Avoid slicing for better efficiency
+        result[start:end] = array1[start:end] + array2[start:end]
 
-
-def sum_arrays_chunkwise(array1, array2, chunk_size=100_000, un_memmap=True):
+def sum_arrays_chunkwise(array1, array2, chunk_size=10_000, un_memmap=True):
     """
     Sums two arrays in chunks using numba for efficient processing.
 
-    :param:
-        - array1: np.ndarray or np.memmap
-        - array2: np.ndarray or np.memmap
-        - chunk_size: int, size of each chunk
-        - un_memmap: bool, whether to convert memmap arrays to regular arrays if they fit in memory
-
-    :return:
-        - np.ndarray or np.memmap: result array which is the sum of array1 and array2
+    :param array1: np.ndarray or np.memmap
+    :param array2: np.ndarray or np.memmap
+    :param chunk_size: int, size of each chunk
+    :param un_memmap: bool, whether to convert memmap arrays to regular arrays if they fit in memory
+    :return: np.ndarray or np.memmap
     """
 
     # Ensure arrays have the same shape
@@ -42,24 +37,16 @@ def sum_arrays_chunkwise(array1, array2, chunk_size=100_000, un_memmap=True):
     original_shape = array1.shape
     n = array1.size  # Flattened length
 
-    # Flatten the arrays
-    array1_flat = array1.ravel()
-    array2_flat = array2.ravel()
-
-    # Adjust chunk size for large arrays
-    chunk_size = min(chunk_size, n)
+    # Ensure arrays are contiguous
+    array1_flat = np.ascontiguousarray(array1.ravel())
+    array2_flat = np.ascontiguousarray(array2.ravel())
 
     # Optionally convert memmap arrays to regular arrays
-    def try_convert_to_array(arr):
-        if un_memmap and isinstance(arr, np.memmap):
-            try:
-                return np.array(arr)
-            except MemoryError:
-                return arr  # Fallback to memmap
-        return arr
-
-    array1_flat = try_convert_to_array(array1_flat)
-    array2_flat = try_convert_to_array(array2_flat)
+    if un_memmap:
+        if isinstance(array1_flat, np.memmap):
+            array1_flat = np.array(array1_flat, copy=False)
+        if isinstance(array2_flat, np.memmap):
+            array2_flat = np.array(array2_flat, copy=False)
 
     # Determine result array type
     if isinstance(array1_flat, np.memmap) or isinstance(array2_flat, np.memmap):

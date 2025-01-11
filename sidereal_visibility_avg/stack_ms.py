@@ -37,7 +37,7 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         total_memory /= chunkmem
-        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/16/self.freq_len), 1_000_000)
+        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/16/self.freq_len), 1_00_000)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
@@ -154,10 +154,10 @@ class Stack:
 
                             new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :],
                                                                              data[row_idxs, :] * weights,
-                                                                             chunk_size=min(self.chunk_size, 1_000_000))
+                                                                             chunk_size=min(self.chunk_size, 10_000))
                             uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :],
                                                                                 weights,
-                                                                                chunk_size=min(self.chunk_size, 1_000_000))
+                                                                                chunk_size=min(self.chunk_size, 10_000))
 
                             try:
                                 uvw_weights.flush()
@@ -167,7 +167,7 @@ class Stack:
                         else:
                             new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)],
                                                                                              data[row_idxs, :],
-                                                                                             chunk_size=min(self.chunk_size, 1_000_000))
+                                                                                             chunk_size=min(self.chunk_size, 10_000))
 
                     try:
                         new_data.flush()
