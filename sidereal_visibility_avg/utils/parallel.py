@@ -55,6 +55,7 @@ def multiply_arrays(A, B):
 
     return out
 
+
 @njit(parallel=True)
 def add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs):
     """
@@ -80,7 +81,7 @@ def sum_flat_arrays_numba(A_flat, B_flat, out_flat):
         out_flat[i] = A_flat[i] + B_flat[i]
 
 
-def sum_arrays(A, B):
+def sum_arrays(A, B, un_memmap=True):
     """
     Sums two NumPy arrays of any shape (A and B) elementwise.
     Uses Numba with nopython=True, parallel=True on flattened data.
@@ -92,7 +93,10 @@ def sum_arrays(A, B):
     out = np.empty_like(A)
 
     # Flatten (ravel) the arrays to 1D
-    A_flat = np.array(A).ravel()
+    if isinstance(A, np.memmap):
+        A_flat = np.array(A).ravel()
+    else:
+        A_flat = A.ravel()
     B_flat = B.ravel()
     out_flat = out.ravel()
 
