@@ -38,7 +38,7 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         total_memory /= chunkmem
-        self.chunk_size = int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/32/self.freq_len)
+        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/32/self.freq_len), 500_000)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
@@ -89,7 +89,7 @@ class Stack:
         else:
             sys.exit("ERROR: Only column 'DATA' allowed (for now)")
 
-        # Get template data
+        # Get output data
         with table(path.abspath(self.outname), readonly=False, ack=False) as self.T:
 
             # Loop over columns
@@ -102,7 +102,7 @@ class Stack:
                 elif col=='WEIGHT_SPECTRUM':
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
                 else:
-                    new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=True, tmp_folder=self.tmp_folder)
+                    new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
 
 
                 # Loop over measurement sets
@@ -110,7 +110,7 @@ class Stack:
 
                     print(f'\n{col} :: {ms}')
 
-                    # Open MS table
+                    # Open MS table to stack on output data
                     t = table(f'{path.abspath(ms)}', ack=False, readonly=True)
 
                     # Get freqs offset
@@ -138,10 +138,11 @@ class Stack:
                         print_progress_bar(chunk_idx, chunks+1)
                         data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
 
-                        # multiply with weight_spectrum for weighted average
+                        # Multiply with weight_spectrum for weighted average
                         if col=='DATA':
-                            print('DATA * WEIGHT_SPECTRUM')
-                            data = multiply_arrays(data, t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size))
+                            weights = t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                            data = multiply_arrays(data, weights)
+                            del weights
 
                         # Reduce to one polarisation, since weights have same values for other polarisations
                         elif col=='WEIGHT_SPECTRUM':
@@ -159,6 +160,7 @@ class Stack:
                                 print("Issues with UVW_weights, continue with ones")
                                 weights = np.ones(data[row_idxs, :].shape)
 
+                            # Stacking
                             subdata_new = new_data[row_idxs_new, :]
                             subdata = data[row_idxs, :]
                             result = sum_arrays(subdata_new, subdata* weights)
@@ -172,12 +174,13 @@ class Stack:
                                 pass
 
                         else:
+                            # Stacking
                             subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
                             subdata = data[row_idxs, :]
                             idx_mask = np.ix_(row_idxs_new, freq_idxs)
                             new_data[idx_mask] = sum_arrays(subdata_new, subdata)
 
-                        # cleanup
+                        # Cleanup
                         del subdata
                         del subdata_new
                         del data
