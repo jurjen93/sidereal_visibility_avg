@@ -38,7 +38,7 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         total_memory /= chunkmem
-        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/64/self.freq_len), 1_000_000)
+        self.chunk_size = int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/32/self.freq_len)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
@@ -137,17 +137,19 @@ class Stack:
                     for chunk_idx in range(chunks):
                         print_progress_bar(chunk_idx, chunks+1)
                         data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+
+                        # multiply with weight_spectrum for weighted average
                         if col=='DATA':
+                            print('DATA * WEIGHT_SPECTRUM')
                             data = multiply_arrays(data, t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size))
 
                         # Reduce to one polarisation, since weights have same values for other polarisations
-                        if col=='WEIGHT_SPECTRUM':
+                        elif col=='WEIGHT_SPECTRUM':
                             data = data[..., 0]
 
                         row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
                         row_idxs = [int(i - chunk_idx * self.chunk_size) for i in
                                     indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
-
 
                         if col == 'UVW':
                             try:
