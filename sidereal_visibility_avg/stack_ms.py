@@ -95,6 +95,8 @@ class Stack:
             # Loop over columns
             for col in columns:
 
+                gc.collect()
+
                 if col == 'UVW':
                     new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
                 elif col=='WEIGHT_SPECTRUM':
