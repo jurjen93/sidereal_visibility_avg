@@ -7,8 +7,10 @@ from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
-from numba import njit, prange, jit
+from numba import njit, prange, jit, set_num_threads
 
+# Ensure some cores free
+set_num_threads(max(cpu_count() - 2, 1))
 
 @njit(parallel=True)
 def add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs):
