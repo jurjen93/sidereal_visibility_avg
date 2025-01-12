@@ -5,11 +5,12 @@ import sys
 import psutil
 from glob import glob
 from scipy.ndimage import gaussian_filter1d
+import gc
 
 from .utils.arrays_and_lists import find_closest_index_list
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
-from .utils.parallel import sum_arrays_chunkwise
+from .utils.parallel import sum_arrays, add_into_new_data
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
 
@@ -93,6 +94,7 @@ class Stack:
 
             # Loop over columns
             for col in columns:
+                gc.collect()
 
                 if col == 'UVW':
                     new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, tmp_folder=self.tmp_folder)
@@ -140,9 +142,14 @@ class Stack:
                         data = t.getcol(col+"_WEIGHTED" if col == 'DATA' else col,
                                                 startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
 
+                        # Reduce to one polarisation, since weights have same values for other polarisations
+                        if col=='WEIGHT_SPECTRUM':
+                            data = data[..., 0]
+
                         row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
                         row_idxs = [int(i - chunk_idx * self.chunk_size) for i in
                                     indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
+
 
                         if col == 'UVW':
                             try:
@@ -152,12 +159,12 @@ class Stack:
                                 print("Issues with UVW_weights, continue with ones")
                                 weights = np.ones(data[row_idxs, :].shape)
 
-                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :],
-                                                                             data[row_idxs, :] * weights,
-                                                                             chunk_size=min(self.chunk_size, 10_000))
-                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :],
-                                                                                weights,
-                                                                                chunk_size=min(self.chunk_size, 10_000))
+                            subdata_new = new_data[row_idxs_new, :]
+                            subdata = data[row_idxs, :]
+                            result = sum_arrays(subdata_new, subdata* weights)
+                            new_data[row_idxs_new, :] = result
+                            result = sum_arrays(uvw_weights[row_idxs_new, :], weights)
+                            uvw_weights[row_idxs_new, :] = result
 
                             try:
                                 uvw_weights.flush()
@@ -165,9 +172,13 @@ class Stack:
                                 pass
 
                         else:
-                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)],
-                                                                                             data[row_idxs, :],
-                                                                                             chunk_size=min(self.chunk_size, 10_000))
+                            # subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
+                            # subdata = data[row_idxs, :]
+                            # idx_mask = np.ix_(row_idxs_new, freq_idxs)
+                            # new_data[idx_mask] = sum_arrays(subdata_new, subdata)
+                            # del subdata_new
+                            # del subdata
+                            add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs)
 
                     try:
                         new_data.flush()
@@ -182,6 +193,10 @@ class Stack:
                     uvw_weights[uvw_weights == 0] = 1
                     new_data /= uvw_weights
                     new_data[new_data != new_data] = 0.
+
+                if col == 'WEIGHT_SPECTRUM':
+                    shape = list(new_data.shape)+[4]
+                    new_data = np.tile(new_data, 4).reshape(shape)
 
                 for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
                     start = chunk_idx * self.chunk_size
