@@ -165,7 +165,7 @@ class Template:
         outname = self.outname  # Cache instance variables locally
         time_lst_offset = self.time_lst_offset
 
-        with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(outname)} ORDER BY TIME") as T:
+        with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(outname)}") as T:
             ref_time = T.getcol("TIME")
             ref_antennas = np.c_[T.getcol("ANTENNA1"), T.getcol("ANTENNA2")]
 
@@ -178,7 +178,7 @@ class Template:
             print(f'\nMapping: {ms}')
 
             # Open the MS table and read columns
-            with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(ms)} ORDER BY TIME") as t:
+            with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(ms)}") as t:
 
                 # Mapping folder for the current MS
                 mapping_folder = self.tmp_folder + ms + '_baseline_mapping'

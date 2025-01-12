@@ -5,11 +5,12 @@ import sys
 import psutil
 from glob import glob
 from scipy.ndimage import gaussian_filter1d
+import gc
 
 from .utils.arrays_and_lists import find_closest_index_list
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
-from .utils.parallel import sum_arrays_chunkwise
+from .utils.parallel import sum_arrays, add_into_new_data, multiply_arrays
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
 
@@ -37,7 +38,7 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         total_memory /= chunkmem
-        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/64/self.freq_len), 500_000)
+        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/32/self.freq_len), 500_000)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
@@ -88,31 +89,29 @@ class Stack:
         else:
             sys.exit("ERROR: Only column 'DATA' allowed (for now)")
 
-        # Get template data
+        # Get output data
         with table(path.abspath(self.outname), readonly=False, ack=False) as self.T:
 
             # Loop over columns
             for col in columns:
 
+                gc.collect()
+
                 if col == 'UVW':
-                    new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, tmp_folder=self.tmp_folder)
+                    new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
+                elif col=='WEIGHT_SPECTRUM':
+                    new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
                 else:
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
+
 
                 # Loop over measurement sets
                 for ms in self.mslist:
 
                     print(f'\n{col} :: {ms}')
 
-                    # Open MS table
-                    if col == 'DATA':
-                        t = taql(f"SELECT {col} * WEIGHT_SPECTRUM AS DATA_WEIGHTED FROM {path.abspath(ms)} ORDER BY TIME")
-                    elif col == 'UVW':
-                        t = taql(f"SELECT {col},WEIGHT_SPECTRUM FROM {path.abspath(ms)} ORDER BY TIME")
-                    else:
-                        t = taql(f"SELECT {col} FROM {path.abspath(ms)} ORDER BY TIME")
-
-                    print("TAQL query finished")
+                    # Open MS table to stack on output data
+                    t = table(f'{path.abspath(ms)}', ack=False, readonly=True)
 
                     # Get freqs offset
                     if col != 'UVW':
@@ -137,12 +136,21 @@ class Stack:
                     print(f'Stacking in {chunks} chunks')
                     for chunk_idx in range(chunks):
                         print_progress_bar(chunk_idx, chunks+1)
-                        data = t.getcol(col+"_WEIGHTED" if col == 'DATA' else col,
-                                                startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                        data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
 
+                        # Multiply with weight_spectrum for weighted average
+                        if col=='DATA':
+                            weights = t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                            data = multiply_arrays(data, weights)
+                            del weights
+
+                        # Reduce to one polarisation, since weights have same values for other polarisations
+                        elif col=='WEIGHT_SPECTRUM':
+                            data = data[..., 0]
+
+                        # Get indices
                         row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
-                        row_idxs = [int(i - chunk_idx * self.chunk_size) for i in
-                                    indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
+                        row_idxs = [int(i - chunk_idx * self.chunk_size) for i in indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
                             try:
@@ -152,12 +160,13 @@ class Stack:
                                 print("Issues with UVW_weights, continue with ones")
                                 weights = np.ones(data[row_idxs, :].shape)
 
-                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :],
-                                                                             data[row_idxs, :] * weights,
-                                                                             chunk_size=min(self.chunk_size, 10_000))
-                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :],
-                                                                                weights,
-                                                                                chunk_size=min(self.chunk_size, 10_000))
+                            # Stacking
+                            subdata_new = new_data[row_idxs_new, :]
+                            subdata = data[row_idxs, :]
+                            result = sum_arrays(subdata_new, subdata* weights)
+                            new_data[row_idxs_new, :] = result
+                            result = sum_arrays(uvw_weights[row_idxs_new, :], weights)
+                            uvw_weights[row_idxs_new, :] = result
 
                             try:
                                 uvw_weights.flush()
@@ -165,9 +174,17 @@ class Stack:
                                 pass
 
                         else:
-                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)],
-                                                                                             data[row_idxs, :],
-                                                                                             chunk_size=min(self.chunk_size, 10_000))
+                            # Stacking
+                            subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
+                            subdata = data[row_idxs, :]
+                            idx_mask = np.ix_(row_idxs_new, freq_idxs)
+                            new_data[idx_mask] = sum_arrays(subdata_new, subdata)
+
+                        # Cleanup
+                        del subdata
+                        del subdata_new
+                        del data
+                        gc.collect()
 
                     try:
                         new_data.flush()
@@ -182,6 +199,10 @@ class Stack:
                     uvw_weights[uvw_weights == 0] = 1
                     new_data /= uvw_weights
                     new_data[new_data != new_data] = 0.
+
+                if col == 'WEIGHT_SPECTRUM':
+                    shape = list(new_data.shape)+[4]
+                    new_data = np.tile(new_data, 4).reshape(shape)
 
                 for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
                     start = chunk_idx * self.chunk_size
