@@ -110,13 +110,13 @@ class Stack:
 
                     print(f'\n{col} :: {ms}')
 
-                    # Open MS table
+                    # Open MS table TODO: Make more efficient?
                     if col == 'DATA':
-                        t = taql(f"SELECT {col} * WEIGHT_SPECTRUM AS DATA_WEIGHTED FROM {path.abspath(ms)} ORDER BY TIME")
+                        t = taql(f"SELECT {col} * WEIGHT_SPECTRUM AS DATA_WEIGHTED FROM {path.abspath(ms)}")
                     elif col == 'UVW':
-                        t = taql(f"SELECT {col},WEIGHT_SPECTRUM FROM {path.abspath(ms)} ORDER BY TIME")
+                        t = taql(f"SELECT {col},WEIGHT_SPECTRUM FROM {path.abspath(ms)}")
                     else:
-                        t = taql(f"SELECT {col} FROM {path.abspath(ms)} ORDER BY TIME")
+                        t = taql(f"SELECT {col} FROM {path.abspath(ms)}")
 
                     print("TAQL query finished")
 
