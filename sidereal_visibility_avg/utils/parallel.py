@@ -81,7 +81,7 @@ def sum_flat_arrays_numba(A_flat, B_flat, out_flat):
         out_flat[i] = A_flat[i] + B_flat[i]
 
 
-def sum_arrays(A, B, un_memmap=True):
+def sum_arrays(A, B):
     """
     Sums two NumPy arrays of any shape (A and B) elementwise.
     Uses Numba with nopython=True, parallel=True on flattened data.
