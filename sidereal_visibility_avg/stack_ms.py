@@ -94,7 +94,6 @@ class Stack:
 
             # Loop over columns
             for col in columns:
-                gc.collect()
 
                 if col == 'UVW':
                     new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
@@ -181,6 +180,9 @@ class Stack:
                             # new_data[idx_mask] = sum_arrays(subdata_new, subdata)
                             #TODO: Issues with following njit--nopython function
                             add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs)
+
+                        del data
+                        gc.collect()
 
                     try:
                         new_data.flush()
