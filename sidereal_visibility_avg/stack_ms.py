@@ -176,7 +176,7 @@ class Stack:
                             subdata = data[row_idxs, :]
                             idx_mask = np.ix_(row_idxs_new, freq_idxs)
                             new_data[idx_mask] = sum_arrays(subdata_new, subdata)
-                            #TODO: Issues with following njit--nopython
+                            #TODO: Issues with following njit--nopython function
                             # add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs)
 
                     try:
