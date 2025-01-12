@@ -10,7 +10,7 @@ import gc
 from .utils.arrays_and_lists import find_closest_index_list
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
-from .utils.parallel import sum_arrays, add_into_new_data
+from .utils.parallel import sum_arrays, add_into_new_data, multiply_arrays
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
 
@@ -110,15 +110,8 @@ class Stack:
 
                     print(f'\n{col} :: {ms}')
 
-                    # Open MS table TODO: Make more efficient?
-                    if col == 'DATA':
-                        t = taql(f"SELECT {col} * WEIGHT_SPECTRUM AS DATA_WEIGHTED FROM {path.abspath(ms)}")
-                    elif col == 'UVW':
-                        t = taql(f"SELECT {col},WEIGHT_SPECTRUM FROM {path.abspath(ms)}")
-                    else:
-                        t = taql(f"SELECT {col} FROM {path.abspath(ms)}")
-
-                    print("TAQL query finished")
+                    # Open MS table
+                    t = table(f'{path.abspath(ms)}', ack=False, readonly=True)
 
                     # Get freqs offset
                     if col != 'UVW':
@@ -143,8 +136,9 @@ class Stack:
                     print(f'Stacking in {chunks} chunks')
                     for chunk_idx in range(chunks):
                         print_progress_bar(chunk_idx, chunks+1)
-                        data = t.getcol(col+"_WEIGHTED" if col == 'DATA' else col,
-                                                startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                        data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                        if col=='DATA':
+                            data = multiply_arrays(data, t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size))
 
                         # Reduce to one polarisation, since weights have same values for other polarisations
                         if col=='WEIGHT_SPECTRUM':

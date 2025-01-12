@@ -12,6 +12,49 @@ from numba import njit, prange, jit, set_num_threads
 # Ensure some cores free
 set_num_threads(max(cpu_count() - 2, 1))
 
+
+@njit(parallel=True)
+def multiply_flat_arrays_numba(A_flat, B_flat, out_flat):
+    """
+    Numba kernel that multiplies two flattened arrays into a flattened output.
+    A_flat, B_flat, out_flat must all be 1D and of the same size.
+    """
+    n = A_flat.size
+    for i in prange(n):
+        out_flat[i] = A_flat[i] * B_flat[i]
+
+
+def multiply_arrays(A, B):
+    """
+    Multiplies two NumPy arrays of the same shape elementwise.
+    Uses Numba with parallel=True on flattened data for high efficiency.
+
+    Parameters
+    ----------
+    A, B : np.ndarray
+        Arrays of the same shape and compatible dtypes.
+
+    Returns
+    -------
+    out : np.ndarray
+        The elementwise product of A and B.
+    """
+    # Ensure A and B have the same shape
+    assert A.shape == B.shape, "Arrays must have the same shape"
+
+    # Allocate an output array (same shape and dtype as A)
+    out = np.empty_like(A)
+
+    # Get flattened (ravel) views of A, B, and out
+    A_flat = A.ravel()
+    B_flat = B.ravel()
+    out_flat = out.ravel()
+
+    # Call the parallel Numba kernel on the flattened data
+    multiply_flat_arrays_numba(A_flat, B_flat, out_flat)
+
+    return out
+
 @njit(parallel=True)
 def add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs):
     """
