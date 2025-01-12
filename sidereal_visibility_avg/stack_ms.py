@@ -147,9 +147,9 @@ class Stack:
                         elif col=='WEIGHT_SPECTRUM':
                             data = data[..., 0]
 
+                        # Get indices
                         row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
-                        row_idxs = [int(i - chunk_idx * self.chunk_size) for i in
-                                    indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
+                        row_idxs = [int(i - chunk_idx * self.chunk_size) for i in indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
                             try:
@@ -176,8 +176,6 @@ class Stack:
                             subdata = data[row_idxs, :]
                             idx_mask = np.ix_(row_idxs_new, freq_idxs)
                             new_data[idx_mask] = sum_arrays(subdata_new, subdata)
-                            #TODO: Issues with following njit--nopython function
-                            # add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs)
 
                         # cleanup
                         del subdata
