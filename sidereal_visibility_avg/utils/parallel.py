@@ -10,7 +10,7 @@ from multiprocessing import cpu_count
 from numba import njit, prange, jit
 
 
-@njit(parallel=True, nopython=True)
+@njit(parallel=True)
 def add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs):
     """
     In-place addition: #TODO: Test if this works?

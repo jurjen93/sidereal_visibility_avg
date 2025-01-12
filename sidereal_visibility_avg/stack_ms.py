@@ -172,13 +172,12 @@ class Stack:
                                 pass
 
                         else:
-                            # subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
-                            # subdata = data[row_idxs, :]
-                            # idx_mask = np.ix_(row_idxs_new, freq_idxs)
-                            # new_data[idx_mask] = sum_arrays(subdata_new, subdata)
-                            # del subdata_new
-                            # del subdata
-                            add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs)
+                            subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
+                            subdata = data[row_idxs, :]
+                            idx_mask = np.ix_(row_idxs_new, freq_idxs)
+                            new_data[idx_mask] = sum_arrays(subdata_new, subdata)
+                            #TODO: Issues with following njit--nopython
+                            # add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs)
 
                     try:
                         new_data.flush()
