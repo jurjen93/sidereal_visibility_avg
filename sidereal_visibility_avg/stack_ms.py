@@ -37,7 +37,7 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         total_memory /= chunkmem
-        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/16/self.freq_len), 500_000)
+        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/64/self.freq_len), 500_000)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
@@ -137,17 +137,12 @@ class Stack:
                     print(f'Stacking in {chunks} chunks')
                     for chunk_idx in range(chunks):
                         print_progress_bar(chunk_idx, chunks+1)
+                        data = t.getcol(col+"_WEIGHTED" if col == 'DATA' else col,
+                                                startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
 
                         row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
                         row_idxs = [int(i - chunk_idx * self.chunk_size) for i in
                                     indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
-
-                        data = t.getcol(col+"_WEIGHTED" if col == 'DATA' else col,
-                                                startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
-
-                        data = data[row_idxs, :]
-                        subnew_data = new_data[row_idxs_new, :]
-                        subuvw_weights = uvw_weights[row_idxs_new, :]
 
                         if col == 'UVW':
                             try:
@@ -155,11 +150,13 @@ class Stack:
                                 weights = np.tile(weights[row_idxs, :, 0].mean(axis=1), 3).reshape(len(row_idxs), 3)
                             except IndexError:
                                 print("Issues with UVW_weights, continue with ones")
-                                weights = np.ones(data.shape)
+                                weights = np.ones(data[row_idxs, :].shape)
 
-                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(subnew_data, data * weights,
+                            new_data[row_idxs_new, :] = sum_arrays_chunkwise(new_data[row_idxs_new, :],
+                                                                             data[row_idxs, :] * weights,
                                                                              chunk_size=min(self.chunk_size, 10_000))
-                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(subuvw_weights, weights,
+                            uvw_weights[row_idxs_new, :] = sum_arrays_chunkwise(uvw_weights[row_idxs_new, :],
+                                                                                weights,
                                                                                 chunk_size=min(self.chunk_size, 10_000))
 
                             try:
@@ -168,7 +165,8 @@ class Stack:
                                 pass
 
                         else:
-                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(subnew_data, data,
+                            new_data[np.ix_(row_idxs_new, freq_idxs)] = sum_arrays_chunkwise(new_data[np.ix_(row_idxs_new, freq_idxs)],
+                                                                                             data[row_idxs, :],
                                                                                              chunk_size=min(self.chunk_size, 10_000))
 
                     try:
