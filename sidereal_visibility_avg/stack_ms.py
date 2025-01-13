@@ -7,7 +7,7 @@ from glob import glob
 from scipy.ndimage import gaussian_filter1d
 import gc
 
-from .utils.arrays_and_lists import find_closest_index_list
+from .utils.arrays_and_lists import find_closest_index_list, add_axis
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
 from .utils.parallel import sum_arrays, add_into_new_data, multiply_arrays
@@ -38,7 +38,7 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         total_memory /= chunkmem
-        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/32/self.freq_len), 500_000)
+        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/32/self.freq_len), 400_000_000//self.freq_len)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
@@ -104,7 +104,6 @@ class Stack:
                 else:
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
 
-
                 # Loop over measurement sets
                 for ms in self.mslist:
 
@@ -153,12 +152,9 @@ class Stack:
                         row_idxs = [int(i - chunk_idx * self.chunk_size) for i in indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
-                            try:
-                                weights = t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
-                                weights = np.tile(weights[row_idxs, :, 0].mean(axis=1), 3).reshape(len(row_idxs), 3)
-                            except IndexError:
-                                print("Issues with UVW_weights, continue with ones")
-                                weights = np.ones(data[row_idxs, :].shape)
+
+                            weights = t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                            weights = np.tile(np.nanmean(weights[row_idxs, :, 0], axis=1), 3).reshape(len(row_idxs), 3)
 
                             # Stacking
                             subdata_new = new_data[row_idxs_new, :]
@@ -201,8 +197,7 @@ class Stack:
                     new_data[new_data != new_data] = 0.
 
                 if col == 'WEIGHT_SPECTRUM':
-                    shape = list(new_data.shape)+[4]
-                    new_data = np.tile(new_data, 4).reshape(shape)
+                    new_data = add_axis(new_data, 4)
 
                 for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
                     start = chunk_idx * self.chunk_size
@@ -210,8 +205,8 @@ class Stack:
                     self.T.putcol(col, new_data[start:end], startrow=start, nrow=end - start)
 
                 # clean up
+                del new_data
                 clean_binary_file(self.tmp_folder + col.lower() + '.tmp.dat')
-
 
         # ADD FLAG
         print(f'Put column FLAG')

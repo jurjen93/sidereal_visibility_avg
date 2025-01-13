@@ -359,11 +359,11 @@ class Template:
 
         if time_res is not None:
             time_range = np.arange(min_t_lst + self.time_lst_offset,
-                                   max_t_lst + min_dt + self.time_lst_offset, time_res)
+                                   max_t_lst + self.time_lst_offset, time_res)
 
         else:
             time_range = np.arange(min_t_lst + self.time_lst_offset,
-                                   max_t_lst + min_dt + self.time_lst_offset, min_dt/avg_factor)
+                                   max_t_lst + self.time_lst_offset, min_dt/avg_factor)
 
         baseline_count = n_baselines(len(self.station_info))
         nrows = baseline_count*len(time_range)
