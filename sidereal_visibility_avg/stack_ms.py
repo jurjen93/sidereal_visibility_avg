@@ -82,10 +82,10 @@ class Stack:
         """
 
         if column == 'DATA':
-            if interpolate_uvw:
-                columns = ['UVW', column, 'WEIGHT_SPECTRUM']
-            else:
-                columns = [column, 'WEIGHT_SPECTRUM']
+            # if interpolate_uvw:
+            columns = ['UVW', column, 'WEIGHT_SPECTRUM']
+            # else:
+            #     columns = [column, 'WEIGHT_SPECTRUM']
         else:
             sys.exit("ERROR: Only column 'DATA' allowed (for now)")
 
