@@ -202,7 +202,7 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
 
     elif column == 'WEIGHT_SPECTRUM' or column=='WEIGHT':
         dtp = np.float32
-        shape = (nrows, freq_len, 4)
+        shape = (nrows, freq_len)
 
     elif column == 'UVW':
         shape, dtp = (nrows, 3), np.float32

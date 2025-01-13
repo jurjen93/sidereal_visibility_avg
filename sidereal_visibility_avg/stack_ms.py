@@ -7,7 +7,7 @@ from glob import glob
 from scipy.ndimage import gaussian_filter1d
 import gc
 
-from .utils.arrays_and_lists import find_closest_index_list
+from .utils.arrays_and_lists import find_closest_index_list, add_axis
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
 from .utils.parallel import sum_arrays, add_into_new_data, multiply_arrays
@@ -145,8 +145,8 @@ class Stack:
                             del weights
 
                         # Reduce to one polarisation, since weights have same values for other polarisations
-                        # elif col=='WEIGHT_SPECTRUM':
-                        #     data = data[..., 0]
+                        elif col=='WEIGHT_SPECTRUM':
+                            data = data[..., 0]
 
                         # Get indices
                         row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
@@ -198,9 +198,8 @@ class Stack:
                     new_data /= uvw_weights
                     new_data[new_data != new_data] = 0.
 
-                # if col == 'WEIGHT_SPECTRUM':
-                #     shape = list(new_data.shape)+[4]
-                #     new_data = np.tile(new_data, 4).reshape(shape)
+                if col == 'WEIGHT_SPECTRUM':
+                    new_data = add_axis(new_data, 4)
 
                 for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
                     start = chunk_idx * self.chunk_size
