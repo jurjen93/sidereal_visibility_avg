@@ -247,7 +247,7 @@ class Template:
                     time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
 
             # Determine number of workers
-            num_workers = max(cpu_count()-3, 1)  # I/O-bound heuristic
+            num_workers = max(cpu_count()-5, 1)  # I/O-bound heuristic
 
             batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
 

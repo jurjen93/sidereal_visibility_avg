@@ -82,10 +82,10 @@ class Stack:
         """
 
         if column == 'DATA':
-            # if interpolate_uvw:
-            columns = ['UVW', column, 'WEIGHT_SPECTRUM']
-            # else:
-            #     columns = [column, 'WEIGHT_SPECTRUM']
+            if interpolate_uvw:
+                columns = ['UVW', column, 'WEIGHT_SPECTRUM']
+            else:
+                columns = [column, 'WEIGHT_SPECTRUM']
         else:
             sys.exit("ERROR: Only column 'DATA' allowed (for now)")
 
@@ -153,12 +153,9 @@ class Stack:
                         row_idxs = [int(i - chunk_idx * self.chunk_size) for i in indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
-                            # try:
-                            #     weights = t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
-                            #     weights = np.tile(weights[row_idxs, :, 0].mean(axis=1), 3).reshape(len(row_idxs), 3)
-                            # except IndexError:
-                            #     print("Issues with UVW_weights, continue with ones")
-                            weights = np.ones(data[row_idxs, :].shape)
+
+                            weights = t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                            weights = np.tile(weights[row_idxs, :, 0].mean(axis=1), 3).reshape(len(row_idxs), 3)
 
                             # Stacking
                             subdata_new = new_data[row_idxs_new, :]
