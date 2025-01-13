@@ -104,7 +104,6 @@ class Stack:
                 else:
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
 
-
                 # Loop over measurement sets
                 for ms in self.mslist:
 
@@ -177,7 +176,6 @@ class Stack:
                             idx_mask = np.ix_(row_idxs_new, freq_idxs)
                             new_data[idx_mask] = sum_arrays(subdata_new, subdata)
 
-
                         # Cleanup
                         del subdata
                         del subdata_new
@@ -209,7 +207,6 @@ class Stack:
                 # clean up
                 del new_data
                 clean_binary_file(self.tmp_folder + col.lower() + '.tmp.dat')
-
 
         # ADD FLAG
         print(f'Put column FLAG')
