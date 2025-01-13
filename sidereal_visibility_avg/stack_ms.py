@@ -154,7 +154,7 @@ class Stack:
                         if col == 'UVW':
 
                             weights = t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
-                            weights = np.tile(np.nanmean(weights[row_idxs, :, 0], axis=1), 3).reshape(len(row_idxs), 3)
+                            weights = add_axis(np.nanmean(weights[row_idxs, :, 0], axis=1), 3)
 
                             # Stacking
                             subdata_new = new_data[row_idxs_new, :]
