@@ -145,8 +145,8 @@ class Stack:
                             del weights
 
                         # Reduce to one polarisation, since weights have same values for other polarisations
-                        elif col=='WEIGHT_SPECTRUM':
-                            data = data[..., 0]
+                        # elif col=='WEIGHT_SPECTRUM':
+                        #     data = data[..., 0]
 
                         # Get indices
                         row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
@@ -175,8 +175,8 @@ class Stack:
                             subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
                             subdata = data[row_idxs, :]
                             idx_mask = np.ix_(row_idxs_new, freq_idxs)
-                            # new_data[idx_mask] = sum_arrays(subdata_new, subdata)
-                            new_data[idx_mask] = subdata_new+subdata
+                            new_data[idx_mask] = sum_arrays(subdata_new, subdata)
+
 
                         # Cleanup
                         del subdata
@@ -198,9 +198,9 @@ class Stack:
                     new_data /= uvw_weights
                     new_data[new_data != new_data] = 0.
 
-                if col == 'WEIGHT_SPECTRUM':
-                    shape = list(new_data.shape)+[4]
-                    new_data = np.tile(new_data, 4).reshape(shape)
+                # if col == 'WEIGHT_SPECTRUM':
+                #     shape = list(new_data.shape)+[4]
+                #     new_data = np.tile(new_data, 4).reshape(shape)
 
                 for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
                     start = chunk_idx * self.chunk_size
