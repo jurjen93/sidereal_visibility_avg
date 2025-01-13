@@ -174,7 +174,7 @@ class Stack:
                             # Stacking
                             # subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
                             # subdata = data[row_idxs, :]
-                            # idx_mask = np.ix_(row_idxs_new, freq_idxs)
+                            idx_mask = np.ix_(row_idxs_new, freq_idxs)
                             # new_data[idx_mask] = sum_arrays(subdata_new, subdata)
                             new_data[idx_mask] = subdata_new+subdata
 
