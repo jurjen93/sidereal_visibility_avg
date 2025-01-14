@@ -23,4 +23,4 @@ Strategy:
 The averaging is done with a weighted average, using the FLAG and WEIGHT_SPECTRUM columns.
 
 
-The code and its pros and cons are presented in de Jong et al. subm.
+The code and its pros and cons are presented in de Jong et al. (2025; https://arxiv.org/pdf/2501.07374).
