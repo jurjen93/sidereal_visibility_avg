@@ -196,12 +196,13 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
     else:
         weights = None
 
-    if column in ['DATA', 'WEIGHT_SPECTRUM']:
-        dtp = np.complex64 if column == 'DATA' else np.float32
+    if column == 'DATA':
+        dtp = np.complex64
         shape = (nrows, freq_len, 4)
 
-    elif column == 'WEIGHT':
-        shape, dtp = (nrows, freq_len), np.float32
+    elif column == 'WEIGHT_SPECTRUM' or column=='WEIGHT':
+        dtp = np.float32
+        shape = (nrows, freq_len)
 
     elif column == 'UVW':
         shape, dtp = (nrows, 3), np.float32
