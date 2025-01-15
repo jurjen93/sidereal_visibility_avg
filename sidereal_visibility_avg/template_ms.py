@@ -214,8 +214,8 @@ class Template:
         self.make_mapping_lst()
 
         # Use DP3 to upsample and downsample, recalculating the UVW coordinates
-        run_command(f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up,avg] "
-                    f"up.type=upsample up.timestep=2 up.updateuvw=True avg.timestep=2 avg.type=averager "
+        run_command(f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] "
+                    f"up.type=upsample up.timestep=2 up.updateuvw=True "
                     f"&& rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}")
 
         # Update baseline mapping

@@ -53,7 +53,7 @@ def main():
         print(f"{args.msout} already exists, will be overwritten")
         rmtree(args.msout)
 
-
+    # time averaging (upsampling factor)
     avg = 1
     if args.time_res is not None:
         avg = 1
@@ -68,6 +68,10 @@ def main():
         avg = 2
         time_res = None
         print(f"Additional time sampling factor {avg}\n")
+
+    # upsampling by factor 2 happens with upsample function of DP3
+    if not args.interpolate_uvw:
+        avg/=2
 
     t = Template(args.msin, args.msout, tmp_folder=args.tmp)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg)
