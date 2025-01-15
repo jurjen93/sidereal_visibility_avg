@@ -69,10 +69,6 @@ def main():
         time_res = None
         print(f"Additional time sampling factor {avg}\n")
 
-    # upsampling by factor 2 happens with upsample function of DP3
-    if not args.interpolate_uvw:
-        avg/=2
-
     t = Template(args.msin, args.msout, tmp_folder=args.tmp)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg)
     if args.skip_uvw_mapping:
