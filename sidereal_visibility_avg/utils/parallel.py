@@ -103,7 +103,10 @@ def multiply_arrays(A, B):
     out = np.empty_like(A)
 
     # Get flattened (ravel) views of A, B, and out
-    A_flat = A.ravel()
+    if isinstance(A, np.memmap):
+        A_flat = np.array(A).ravel()
+    else:
+        A_flat = A.ravel()
     B_flat = B.ravel()
     out_flat = out.ravel()
 

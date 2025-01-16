@@ -158,8 +158,8 @@ class Stack:
 
                             # Stacking
                             subdata = multiply_arrays(data[row_idxs, :], weights)
-                            inplace_sum_1d(new_data, subdata, row_idxs_new)
-                            inplace_sum_1d(uvw_weights, weights, row_idxs_new)
+                            np.add.at(new_data, row_idxs_new, subdata)
+                            np.add.at(uvw_weights, row_idxs_new, weights)
 
                             try:
                                 uvw_weights.flush()
@@ -168,7 +168,8 @@ class Stack:
 
                         else:
                             # Stacking
-                            inplace_sum_2d(new_data, data, row_idxs_new, freq_idxs, row_idxs)
+                            idx_mask = np.ix_(row_idxs_new, freq_idxs)
+                            np.add.at(new_data, idx_mask, data[row_idxs, :])
 
                         # Cleanup
                         del data
