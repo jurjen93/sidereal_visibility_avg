@@ -1,7 +1,7 @@
 import numpy as np
 import tempfile
 import json
-from os import path, cpu_count
+from os import path, cpu_count, environ
 from glob import glob
 from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
@@ -10,7 +10,14 @@ from multiprocessing import cpu_count
 from numba import njit, prange, jit, set_num_threads
 
 # Ensure some cores free
-set_num_threads(max(cpu_count() - 2, 1))
+cpucount = min(max(cpu_count() - 2, 1), 64)
+set_num_threads(cpucount)
+
+# Adjust based on available cores
+environ["OMP_NUM_THREADS"] = f"{cpucount}"
+environ["OPENBLAS_NUM_THREADS"] = f"{cpucount}"
+environ["MKL_NUM_THREADS"] = f"{cpucount}"
+environ["NUMEXPR_NUM_THREADS"] = f"{cpucount}"
 
 @jit(nopython=True, parallel=True)
 def inplace_sum_1d(new_data, data, row_idxs):
