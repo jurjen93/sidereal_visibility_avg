@@ -10,7 +10,7 @@ import gc
 from .utils.arrays_and_lists import find_closest_index_list, add_axis
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
-from .utils.parallel import sum_arrays, add_into_new_data, multiply_arrays
+from .utils.parallel import sum_arrays, multiply_arrays, inplace_sum_2d, inplace_sum_1d
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
 
@@ -157,12 +157,9 @@ class Stack:
                             weights = add_axis(np.nanmean(weights[row_idxs, :, 0], axis=1), 3)
 
                             # Stacking
-                            subdata_new = new_data[row_idxs_new, :]
-                            subdata = data[row_idxs, :]
-                            result = sum_arrays(subdata_new, subdata* weights)
-                            new_data[row_idxs_new, :] = result
-                            result = sum_arrays(uvw_weights[row_idxs_new, :], weights)
-                            uvw_weights[row_idxs_new, :] = result
+                            subdata = multiply_arrays(data[row_idxs, :], weights)
+                            inplace_sum_1d(new_data, subdata, row_idxs_new)
+                            inplace_sum_1d(uvw_weights, weights, row_idxs_new)
 
                             try:
                                 uvw_weights.flush()
@@ -171,14 +168,9 @@ class Stack:
 
                         else:
                             # Stacking
-                            subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
-                            subdata = data[row_idxs, :]
-                            idx_mask = np.ix_(row_idxs_new, freq_idxs)
-                            new_data[idx_mask] = sum_arrays(subdata_new, subdata)
+                            inplace_sum_2d(new_data, data, row_idxs_new, freq_idxs, row_idxs)
 
                         # Cleanup
-                        del subdata
-                        del subdata_new
                         del data
                         gc.collect()
 
