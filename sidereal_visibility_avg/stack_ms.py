@@ -10,7 +10,7 @@ import gc
 from .utils.arrays_and_lists import find_closest_index_list, add_axis
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
-from .utils.parallel import multiply_arrays
+from .utils.parallel import multiply_arrays, sum_arrays
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
 
@@ -38,7 +38,7 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         total_memory /= chunkmem
-        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/16/self.freq_len), 1_000_000_000//self.freq_len)
+        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/16/self.freq_len), 400_000_000//self.freq_len)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
@@ -161,8 +161,18 @@ class Stack:
 
                             # Stacking
                             subdata = multiply_arrays(data[row_idxs, :], weights)
-                            np.add.at(new_data, row_idxs_new, subdata)
-                            np.add.at(uvw_weights, row_idxs_new, weights)
+                            if self.num_cpus > 10 and not safe_mem: # method 1
+                                subdata_new = new_data[row_idxs_new, :]
+                                result = sum_arrays(subdata_new, subdata)
+                                new_data[row_idxs_new, :] = result
+                                result = sum_arrays(uvw_weights[row_idxs_new, :], weights)
+                                uvw_weights[row_idxs_new, :] = result
+                                del subdata_new
+                            else: # method 2
+                                np.add.at(new_data, row_idxs_new, subdata)
+                                np.add.at(uvw_weights, row_idxs_new, weights)
+                            del subdata
+                            del weights
 
                             try:
                                 uvw_weights.flush()
@@ -172,7 +182,14 @@ class Stack:
                         else:
                             # Stacking
                             idx_mask = np.ix_(row_idxs_new, freq_idxs)
-                            np.add.at(new_data, idx_mask, data[row_idxs, :])
+                            if self.num_cpus > 10 and not safe_mem: # method 1
+                                subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
+                                subdata = data[row_idxs, :]
+                                new_data[idx_mask] = sum_arrays(subdata_new, subdata)
+                                del subdata
+                                del subdata_new
+                            else: # method 2
+                                np.add.at(new_data, idx_mask, data[row_idxs, :])
 
                         # Cleanup
                         del data
