@@ -10,7 +10,7 @@ import gc
 from .utils.arrays_and_lists import find_closest_index_list, add_axis
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
-from .utils.parallel import multiply_arrays, sum_arrays
+from .utils.parallel import multiply_arrays, sum_arrays, replace_nan
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
 
@@ -138,11 +138,11 @@ class Stack:
 
                         data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
 
-                        # Multiply with weight_spectrum for weighted average
                         if col=='DATA':
                             # convert nan to 0
                             np.nan_to_num(data, copy=False)
 
+                            # Multiply with weight_spectrum for weighted average
                             weights = t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
                             data = multiply_arrays(data, weights)
                             del weights

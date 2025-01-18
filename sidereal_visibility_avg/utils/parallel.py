@@ -12,12 +12,14 @@ from numba import njit, prange, jit, set_num_threads
 # Ensure some cores free
 cpucount = min(max(cpu_count() - 2, 1), 64)
 set_num_threads(cpucount)
-#
-# # Adjust based on available cores
-# environ["OMP_NUM_THREADS"] = f"{cpucount}"
-# environ["OPENBLAS_NUM_THREADS"] = f"{cpucount}"
-# environ["MKL_NUM_THREADS"] = f"{cpucount}"
-# environ["NUMEXPR_NUM_THREADS"] = f"{cpucount}"
+
+
+@jit(nopython=True, parallel=True)
+def replace_nan(arr):
+    for i in prange(arr.shape[0]):
+        arr[i][np.isnan(arr[i])] = 0.0
+    return arr
+
 
 @jit(nopython=True, parallel=True)
 def inplace_sum_1d(new_data, data, row_idxs):
@@ -121,7 +123,6 @@ def multiply_arrays(A, B):
     multiply_flat_arrays_numba(A_flat, B_flat, out_flat)
 
     return out
-
 
 
 @jit(nopython=True, parallel=True)
