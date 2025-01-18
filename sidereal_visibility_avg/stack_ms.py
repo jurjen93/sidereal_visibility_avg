@@ -140,9 +140,10 @@ class Stack:
 
                         # Multiply with weight_spectrum for weighted average
                         if col=='DATA':
-                            weights = t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
                             # convert nan to 0
-                            data = np.nan_to_num(data)
+                            np.nan_to_num(data, copy=False)
+
+                            weights = t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
                             data = multiply_arrays(data, weights)
                             del weights
 
