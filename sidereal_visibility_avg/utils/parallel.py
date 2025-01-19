@@ -1,13 +1,15 @@
-import numpy as np
-import tempfile
 import json
-from os import path, cpu_count, environ
+import tempfile
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from glob import glob
+from multiprocessing import cpu_count
+from os import path
+
+import numpy as np
+from numba import jit, njit, prange, set_num_threads
+
 from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from multiprocessing import cpu_count
-from numba import njit, prange, jit, set_num_threads
 
 # Ensure some cores free
 cpucount = min(max(cpu_count() - 2, 1), 64)

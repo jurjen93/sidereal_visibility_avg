@@ -1,9 +1,10 @@
-from casacore.tables import table
-import numpy as np
-from .lst import mjd_seconds_to_lst_seconds_single
-from sys import exit
-import psutil
 import gc
+import psutil
+import numpy as np
+from sys import exit
+
+from casacore.tables import table
+from .lst import mjd_seconds_to_lst_seconds_single
 
 
 def same_phasedir(mslist: list = None):

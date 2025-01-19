@@ -1,17 +1,18 @@
 """
-LOFAR SIDEREAL VISIBILITY AVERAGER
+LOFAR SIDEREAL VISIBILITY AVERAGER (see https://arxiv.org/pdf/2501.07374)
 """
 
 import sys
-from argparse import ArgumentParser
 import time
-from .utils.dysco import compress
+from argparse import ArgumentParser
+from shutil import rmtree
+
 from .utils.clean import clean_binary_files, clean_mapping_files
+from .utils.dysco import compress
 from .utils.file_handling import check_folder_exists
 from .utils.smearing import time_resolution
-from .template_ms import Template
 from .stack_ms import Stack
-from shutil import rmtree
+from .template_ms import Template
 
 
 def parse_args():
