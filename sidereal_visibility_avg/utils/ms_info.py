@@ -187,7 +187,7 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
         weights_size = np.prod(weights_shape) * np.dtype(weights_dtype).itemsize
         available_memory = psutil.virtual_memory().available
 
-        if weights_size > available_memory / 4:
+        if weights_size > available_memory / 2:
             weights = np.memmap(tmpfilename_weights, dtype=weights_dtype, mode='w+', shape=weights_shape)
         else:
             weights = np.zeros(weights_shape, dtype=weights_dtype)
@@ -213,7 +213,7 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
     data_size = np.prod(shape) * np.dtype(dtp).itemsize
     available_memory = psutil.virtual_memory().available
 
-    if data_size > available_memory / 4 or always_memmap:
+    if data_size > available_memory / 2 or always_memmap:
         if always_memmap:
             print(f'\n--safe_memory requested, because concerned about RAM? --> Use memmap for {column}')
         else:

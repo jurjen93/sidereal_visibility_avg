@@ -1,7 +1,7 @@
 import numpy as np
 import tempfile
 import json
-from os import path, cpu_count
+from os import path, cpu_count, environ
 from glob import glob
 from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
@@ -10,7 +10,73 @@ from multiprocessing import cpu_count
 from numba import njit, prange, jit, set_num_threads
 
 # Ensure some cores free
-set_num_threads(max(cpu_count() - 2, 1))
+cpucount = min(max(cpu_count() - 2, 1), 64)
+set_num_threads(cpucount)
+
+
+@jit(nopython=True, parallel=True)
+def replace_nan(arr):
+    for i in prange(arr.shape[0]):
+        arr[i][np.isnan(arr[i])] = 0.0
+    return arr
+
+
+@jit(nopython=True, parallel=True)
+def inplace_sum_1d(new_data, data, row_idxs):
+    """
+    Update array at specified indices by adding corresponding values from `data`.
+    Uses Numba for efficient parallel computation.
+
+    Parameters:
+    - new_data: 1D NumPy array to update.
+    - data: 1D NumPy array with values to add.
+    - row_idxs: 1D array of row indices in `new_data`.
+    """
+    for i in prange(len(row_idxs)):
+        row = row_idxs[i]
+        new_data[row] += data[i]
+
+
+@jit(nopython=True, parallel=True)
+def inplace_sum_2d(new_data, data, row_idxs_new, freq_idxs, row_idxs):
+    """
+    Update array at specified indices by adding corresponding values from `data`.
+    Uses Numba for efficient parallel computation.
+
+    Parameters:
+    - new_data: 2D NumPy array to update.
+    - data: 2D NumPy array with values to add.
+    - row_idxs_new: 1D array of row indices in `new_data`.
+    - freq_idxs: 1D array of column indices in `new_data`.
+    - row_idxs: 1D array of row indices in `data`.
+    """
+    for i in prange(len(row_idxs_new)):
+        row = row_idxs_new[i]
+        row2 = row_idxs[i]
+        for j in prange(len(freq_idxs)):
+            col = freq_idxs[j]
+            new_data[row, col] += data[row2, j]
+
+
+@jit(nopython=True, parallel=True)
+def inplace_multiply(new_data, data, row_idxs_new, freq_idxs, row_idxs):
+    """
+    Update array at specified indices by multiplying corresponding values from `data`.
+    Uses Numba for efficient parallel computation.
+
+    Parameters:
+    - new_data: 2D NumPy array to update.
+    - data: 2D NumPy array with values to multiply.
+    - row_idxs_new: 1D array of row indices in `new_data`.
+    - freq_idxs: 1D array of column indices in `new_data`.
+    - row_idxs: 1D array of row indices in `data`.
+    """
+    for i in prange(len(row_idxs_new)):
+        row = row_idxs_new[i]
+        row2 = row_idxs[i]
+        for j in prange(len(freq_idxs)):
+            col = freq_idxs[j]
+            new_data[row, col] *= data[row2, j]
 
 
 @njit(parallel=True)
@@ -46,7 +112,10 @@ def multiply_arrays(A, B):
     out = np.empty_like(A)
 
     # Get flattened (ravel) views of A, B, and out
-    A_flat = A.ravel()
+    if isinstance(A, np.memmap):
+        A_flat = np.array(A).ravel()
+    else:
+        A_flat = A.ravel()
     B_flat = B.ravel()
     out_flat = out.ravel()
 
@@ -54,21 +123,6 @@ def multiply_arrays(A, B):
     multiply_flat_arrays_numba(A_flat, B_flat, out_flat)
 
     return out
-
-
-@njit(parallel=True)
-def add_into_new_data(new_data, data, row_idxs_new, row_idxs, freq_idxs):
-    """
-    In-place addition: #TODO: Test if this works?
-    """
-    n_rows = len(row_idxs_new)
-    n_cols = len(freq_idxs)
-    for i in prange(n_rows):
-        r_new = row_idxs_new[i]
-        r_old = row_idxs[i]
-        for j in range(n_cols):
-            c = freq_idxs[j]
-            new_data[r_new, c] += data[r_old, c]
 
 
 @jit(nopython=True, parallel=True)

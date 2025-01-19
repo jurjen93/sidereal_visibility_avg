@@ -10,7 +10,7 @@ import gc
 from .utils.arrays_and_lists import find_closest_index_list, add_axis
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
-from .utils.parallel import sum_arrays, add_into_new_data, multiply_arrays
+from .utils.parallel import multiply_arrays, sum_arrays, replace_nan
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
 
@@ -38,7 +38,7 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         total_memory /= chunkmem
-        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/32/self.freq_len), 400_000_000//self.freq_len)
+        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/16/self.freq_len), 200_000_000//self.freq_len)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
@@ -135,10 +135,14 @@ class Stack:
                     print(f'Stacking in {chunks} chunks')
                     for chunk_idx in range(chunks):
                         print_progress_bar(chunk_idx, chunks+1)
+
                         data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
 
-                        # Multiply with weight_spectrum for weighted average
                         if col=='DATA':
+                            # convert NaN to 0
+                            data[np.isnan(data)] = 0.
+
+                            # Multiply with weight_spectrum for weighted average
                             weights = t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
                             data = multiply_arrays(data, weights)
                             del weights
@@ -157,12 +161,19 @@ class Stack:
                             weights = add_axis(np.nanmean(weights[row_idxs, :, 0], axis=1), 3)
 
                             # Stacking
-                            subdata_new = new_data[row_idxs_new, :]
-                            subdata = data[row_idxs, :]
-                            result = sum_arrays(subdata_new, subdata* weights)
-                            new_data[row_idxs_new, :] = result
-                            result = sum_arrays(uvw_weights[row_idxs_new, :], weights)
-                            uvw_weights[row_idxs_new, :] = result
+                            subdata = multiply_arrays(data[row_idxs, :], weights)
+                            if self.num_cpus > 10 and not safe_mem: # method 1
+                                subdata_new = new_data[row_idxs_new, :]
+                                result = sum_arrays(subdata_new, subdata)
+                                new_data[row_idxs_new, :] = result
+                                result = sum_arrays(uvw_weights[row_idxs_new, :], weights)
+                                uvw_weights[row_idxs_new, :] = result
+                                del subdata_new
+                            else: # method 2
+                                np.add.at(new_data, row_idxs_new, subdata)
+                                np.add.at(uvw_weights, row_idxs_new, weights)
+                            del subdata
+                            del weights
 
                             try:
                                 uvw_weights.flush()
@@ -171,14 +182,17 @@ class Stack:
 
                         else:
                             # Stacking
-                            subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
-                            subdata = data[row_idxs, :]
                             idx_mask = np.ix_(row_idxs_new, freq_idxs)
-                            new_data[idx_mask] = sum_arrays(subdata_new, subdata)
+                            if self.num_cpus > 10 and not safe_mem: # method 1
+                                subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
+                                subdata = data[row_idxs, :]
+                                new_data[idx_mask] = sum_arrays(subdata_new, subdata)
+                                del subdata
+                                del subdata_new
+                            else: # method 2
+                                np.add.at(new_data, idx_mask, data[row_idxs, :])
 
                         # Cleanup
-                        del subdata
-                        del subdata_new
                         del data
                         gc.collect()
 
@@ -196,8 +210,11 @@ class Stack:
                     new_data /= uvw_weights
                     new_data[new_data != new_data] = 0.
 
-                if col == 'WEIGHT_SPECTRUM':
+                elif col == 'WEIGHT_SPECTRUM':
                     new_data = add_axis(new_data, 4)
+
+                elif col == 'DATA':
+                    new_data[new_data==0] = np.nan
 
                 for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
                     start = chunk_idx * self.chunk_size
