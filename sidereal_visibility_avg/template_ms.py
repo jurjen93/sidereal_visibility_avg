@@ -22,7 +22,7 @@ class Template:
     :param:
         - msin: List of input MS
         - outname: Output name for MS
-        - tmp_folder: Use a different temporary folder to store temporary files (mapping, .dat files etc.), such as a local scratch or RAM disk
+        - tmp_folder: Directory to store temporary files (mapping, .dat files etc.), such as a local scratch or RAM disk
     """
 
     def __init__(self, msin: list = None, outname: str = 'empty.ms', tmp_folder: str = '.'):
