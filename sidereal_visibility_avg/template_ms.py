@@ -17,8 +17,17 @@ from .utils.printing import print_progress_bar
 
 
 class Template:
-    """Make template measurement set based on input measurement sets"""
+    """
+    Make template measurement set based on input measurement sets
+    :param:
+        - msin: List of input MS
+        - outname: Output name for MS
+        - tmp_folder: Use a different temporary folder to store temporary files (mapping, .dat files etc.), such as a local scratch or RAM disk
+    """
+
     def __init__(self, msin: list = None, outname: str = 'empty.ms', tmp_folder: str = '.'):
+        if type(msin)!=list:
+            sys.exit("ERROR: input needs to be a list of MS.")
         self.mslist = msin
         self.outname = outname
 
@@ -46,7 +55,9 @@ class Template:
     def get_element_offset(self, station):
         """
         Get element offsets from mslist
+        (hacky way to work around shape difference between Dutch and international stations)
         """
+
         for ms in self.mslist:
             with taql(f'SELECT ROWID() as row_id FROM {ms}::ANTENNA WHERE NAME="{station}"') as rows:
                 if len(rows) == 1:
@@ -55,7 +66,7 @@ class Template:
                         return el.getcol("ELEMENT_OFFSET"), id, ms
         sys.exit(f"ERROR: No {station} in {self.mslist}?")
 
-    def add_spectral_window(self):
+    def add_spectral_window_table(self):
         """
         Add SPECTRAL_WINDOW as sub table
         """
@@ -81,12 +92,12 @@ class Template:
             tnew_spw.putcol("NAME", 'Stacked_MS_'+str(int(np.nanmean(self.channels)//1000000))+"MHz")
             tnew_spw.flush(True)
 
-    def add_stations(self):
+    def add_stations_tables(self):
         """
         Add ANTENNA and FEED tables
         """
 
-        # Extract information
+        # Extract information from collected subtables
         stations = [sp[0] for sp in self.station_info]
         st_id = dict(zip(set(
             [stat[0:8] for stat in stations]),
@@ -223,7 +234,7 @@ class Template:
 
     def interpolate_uvw(self):
         """
-        Fill UVW data points
+        Fill UVW data points through interpolation
         """
 
         # Make baseline/time mapping
@@ -350,13 +361,16 @@ class Template:
                 unique_channels.extend(channels)
                 unique_lofar_stations.extend(lofar_stations)
 
+        # Get station information
         self.station_info = unique_station_list(unique_stations)
         self.lofar_stations_info = unique_station_list(unique_lofar_stations)
 
+        # Make frequency channels for output MS
         chan_range = np.arange(min(unique_channels), max(unique_channels) + dfreq_min, dfreq_min)
         self.channels = np.sort(np.expand_dims(np.unique(chan_range), 0))
         self.chan_num = self.channels.shape[-1]
 
+        # Make time axis for output MS
         if time_res is not None:
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, time_res)
@@ -368,10 +382,10 @@ class Template:
         baseline_count = n_baselines(len(self.station_info))
         nrows = baseline_count*len(time_range)
 
-        # Take one ms for temp usage
+        # Take one ms for temp usage (to remove dysco, and modify)
         tmp_ms = self.mslist[0]
 
-        # Remove dysco compression
+        # Remove dysco compression (otherwise running into tricky errors when modifying MS)
         self.tmpfile = decompress(tmp_ms)
 
         with table(self.tmpfile, ack=False) as self.ref_table:
@@ -399,11 +413,11 @@ class Template:
                 tnew.putcol("FLAG_ROW", np.array([False] * nrows))
                 tnew.putcol("INTERVAL", np.array([np.diff(time_range)[0]] * nrows))
 
-            # Get SPECTRAL_WINDOW info
-            self.add_spectral_window()
+            # Add SPECTRAL_WINDOW info
+            self.add_spectral_window_table()
 
-            # Get ANTENNA/STATION info
-            self.add_stations()
+            # Add ANTENNA/STATION info
+            self.add_stations_tables()
 
             # Get other tables (annoying table locks prevent parallel processing)
             for subtbl in ['FIELD', 'HISTORY', 'FLAG_CMD', 'DATA_DESCRIPTION',

@@ -139,8 +139,8 @@ class Stack:
                         data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
 
                         if col=='DATA':
-                            # convert nan to 0
-                            np.nan_to_num(data, copy=False)
+                            # convert NaN to 0
+                            data[np.isnan(data)] = 0.
 
                             # Multiply with weight_spectrum for weighted average
                             weights = t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
