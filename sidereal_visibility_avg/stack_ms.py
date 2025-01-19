@@ -38,7 +38,7 @@ class Stack:
         self.num_cpus = psutil.cpu_count(logical=True)
         total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         total_memory /= chunkmem
-        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/16/self.freq_len), 200_000_000//self.freq_len)
+        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/16/self.freq_len), 400_000_000//self.freq_len)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
