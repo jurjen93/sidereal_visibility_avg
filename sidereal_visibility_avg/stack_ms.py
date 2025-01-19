@@ -204,7 +204,7 @@ class Stack:
                     print_progress_bar(chunk_idx, chunks)
                     t.close()
 
-                print(f'Put column {col}')
+                print(f'\nPut column {col}')
                 if col == 'UVW':
                     uvw_weights[uvw_weights == 0] = 1
                     new_data /= uvw_weights
@@ -217,6 +217,7 @@ class Stack:
                     new_data[new_data==0] = np.nan
 
                 for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
+                    print_progress_bar(chunk_idx, chunks)
                     start = chunk_idx * self.chunk_size
                     end = min(start + self.chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
                     self.T.putcol(col, new_data[start:end], startrow=start, nrow=end - start)
