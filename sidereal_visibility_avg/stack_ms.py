@@ -78,7 +78,7 @@ class Stack:
         :param:
             - column: column name (currently only DATA)
             - interpolate_uvw: interpolate uvw coordinates (nearest neightbour + weighted average)
-            - safe_mem: use always memmap for DATA and WEIGHT_SPECTRUM
+            - safe_mem: limit RAM usage
         """
 
         if column == 'DATA':
