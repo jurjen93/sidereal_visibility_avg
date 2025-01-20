@@ -24,3 +24,25 @@ def time_resolution(resolution, fov_diam, time_smearing=0.95):
                           distance_from_phase_center_rad)
 
     return int_time
+
+
+def loss_factor(time_resolution, angular_resolution, distance):
+    """
+    Calculate the loss factor
+
+    :params:
+        - time_resolution: time resolution in seconds
+        - angular_resolution: angular resolution in arcseconds
+        - distance: distance from pointing center in degrees
+    :return: loss factor
+    """
+
+    # Convert distance from degrees to radians
+    distance_from_phase_center_rad = np.deg2rad(distance)
+
+    # Calculate angular resolution (radians)
+    angular_resolution_rad = angular_resolution * 4.8481 * 1e-6
+
+    loss = 1 - 1.22*10**-9 * (distance_from_phase_center_rad/angular_resolution_rad)**2*time_resolution**2
+
+    return loss

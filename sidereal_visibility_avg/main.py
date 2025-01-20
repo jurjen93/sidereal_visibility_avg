@@ -57,7 +57,6 @@ def main():
     # time averaging (upsampling factor)
     avg = 1
     if args.time_res is not None:
-        avg = 1
         time_res = args.time_res
         print(f"Use time resolution {time_res} seconds")
     elif args.resolution is not None and args.fov_diam is not None:
