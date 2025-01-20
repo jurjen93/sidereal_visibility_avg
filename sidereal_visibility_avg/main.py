@@ -65,7 +65,8 @@ def main():
     elif args.resolution is not None or args.fov_diam is not None:
         sys.exit("ERROR: if --resolution given, you also have to give --fov_diam, and vice versa.")
     else:
-        avg = 2
+        if len(args.min)>4:
+            avg = 2
         time_res = None
         print(f"Additional time sampling factor {avg}\n")
 
