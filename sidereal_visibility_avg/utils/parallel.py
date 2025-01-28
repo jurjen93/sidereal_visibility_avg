@@ -12,7 +12,7 @@ from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 
 # Ensure some cores free
-cpucount = min(max(cpu_count() - 2, 1), 64)
+cpucount = min(max(cpu_count() - 1, 1), 64)
 set_num_threads(cpucount)
 
 
@@ -266,9 +266,9 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
     """
 
     # Determine optimal batch size
-    batch_size = max(len(uniq_ant_pairs) // (cpu_count() * 2), 1)  # Split tasks across all cores
+    batch_size = max(len(uniq_ant_pairs) // (cpucount * 2), 1)  # Split tasks across all cores
 
-    n_jobs = max(cpu_count() - 5, 1)
+    n_jobs = cpucount
 
     try:
         with ProcessPoolExecutor(max_workers=n_jobs) as executor:
