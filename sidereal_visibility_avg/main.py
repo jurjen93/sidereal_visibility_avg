@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('--dysco', action='store_true', help='Dysco compression of data.')
     parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM storage (slower but less RAM cost if concerned).')
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template.')
-    parser.add_argument('--interpolate_uvw', action='store_true', help='Interpolate UVW with nearest neighbours.')
+    parser.add_argument('--dp3_uvw', action='store_true', help='Use DP3 to recalculate UVW values, instead of interpolation (interpolation is typically more precise).')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')
     parser.add_argument('--skip_uvw_mapping', action='store_true', help='Do not adjust UVW mapping (needs --keep_mapping from earlier run).')
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
@@ -74,17 +74,17 @@ def main():
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg)
     if args.skip_uvw_mapping:
         print('--skip_uvw_mapping requested --> use already existing mapping files')
-    elif args.interpolate_uvw:
-        t.interpolate_uvw()
-    else:
+    elif args.dp3_uvw:
         t.calculate_uvw()
+    else:
+        t.interpolate_uvw()
     print("\n############\nTemplate creation completed\n############")
 
     # Stack MS
     if not args.make_only_template:
         start_time = time.time()
         s = Stack(args.msin, args.msout, tmp_folder=args.tmp)
-        s.stack_all(interpolate_uvw=args.interpolate_uvw, safe_mem=args.safe_memory)
+        s.stack_all(interpolate_uvw=not args.dp3_uvw, safe_mem=args.safe_memory)
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Elapsed time for stacking: {elapsed_time} seconds")
