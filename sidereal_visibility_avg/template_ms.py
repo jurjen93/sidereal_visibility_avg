@@ -25,7 +25,7 @@ class Template:
         - tmp_folder: Directory to store temporary files (mapping, .dat files etc.), such as a local scratch or RAM disk
     """
 
-    def __init__(self, msin: list = None, outname: str = 'empty.ms', tmp_folder: str = '.'):
+    def __init__(self, msin: list = None, outname: str = 'sva_output.ms', tmp_folder: str = '.'):
         if type(msin)!=list:
             sys.exit("ERROR: input needs to be a list of MS.")
         self.mslist = msin

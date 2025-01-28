@@ -17,9 +17,9 @@ from .utils.clean import clean_binary_file
 
 class Stack:
     """
-    Stack measurement sets in template empty.ms
+    Stack measurement sets in template sva_output.ms
     """
-    def __init__(self, msin: list = None, outname: str = 'empty.ms', chunkmem: float = 1., tmp_folder: str = '.'):
+    def __init__(self, msin: list = None, outname: str = 'sva_output.ms', chunkmem: float = 1., tmp_folder: str = '.'):
         if not path.exists(outname):
             sys.exit(f"ERROR: Template {outname} has not been created or is deleted")
         print("\n\n==== Start stacking ====\n")
