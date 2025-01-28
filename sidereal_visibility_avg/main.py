@@ -22,7 +22,7 @@ def parse_args():
 
     parser = ArgumentParser(description='Sidereal visibility averaging')
     parser.add_argument('msin', nargs='+', help='Measurement sets to combine.')
-    parser.add_argument('--msout', type=str, default='empty.ms', help='Measurement set output name.')
+    parser.add_argument('--msout', type=str, default='sva_output.ms', help='Measurement set output name.')
     parser.add_argument('--time_res', type=float, help='Desired time resolution in seconds.')
     parser.add_argument('--resolution', type=float, help='Desired spatial resolution (if given, you also have to give --fov_diam).')
     parser.add_argument('--fov_diam', type=float, help='Desired field of view diameter in degrees. This is used to calculate the optimal time resolution.')
