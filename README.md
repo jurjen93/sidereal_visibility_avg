@@ -6,7 +6,7 @@ The code is currently only written for LOFAR data but may be adjusted for other 
 Install with ```pip install git+https://github.com/jurjen93/sidereal_visibility_avg```
 
 Basic example: 
-```sidereal_visibility_avg --msout <MS_OUTPUT_NAME> --interpolate_uvw *.ms```
+```sva --msout <MS_OUTPUT_NAME> *.ms```
 
 Strategy:
 1) Make a template using the 'default_ms' option from ```casacore.tables``` (Template class).
