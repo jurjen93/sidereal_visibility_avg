@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('--dysco', action='store_true', help='Dysco compression of data.')
     parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM storage (slower but less RAM cost if concerned).')
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template.')
-    parser.add_argument('--dp3_uvw', action='store_true', help='Use DP3 to recalculate UVW values, instead of interpolation (interpolation is typically more precise).')
+    parser.add_argument('--dp3_uvw', action='store_true', help='Use DP3 to recalculate UVW values, instead of interpolation (interpolation is probably more precise).')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')
     parser.add_argument('--skip_uvw_mapping', action='store_true', help='Do not adjust UVW mapping (needs --keep_mapping from earlier run).')
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')

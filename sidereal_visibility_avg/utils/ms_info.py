@@ -18,9 +18,9 @@ def same_phasedir(mslist: list = None):
     for n, ms in enumerate(mslist):
         t = table(ms+'::FIELD', ack=False)
         if n==0:
-            phasedir = t.getcol("PHASE_DIR")
+            phasedir = t.getcol("PHASE_DIR").round(4)
         else:
-            if not np.all(phasedir == t.getcol("PHASE_DIR")):
+            if not np.all(phasedir == t.getcol("PHASE_DIR").round(4)):
                 exit("MS do not have the same phase center, check "+ms)
 
 
