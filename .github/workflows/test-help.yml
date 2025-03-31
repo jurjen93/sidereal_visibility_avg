@@ -30,8 +30,12 @@ jobs:
           singularity exec --bind $(pwd):/repo flocs.sif \
           python /repo/sidereal_visibility_avg/main.py --help
 
-      - name: Run --help on h5_merger
+      - name: Run testcase1
         run: |
           singularity exec --bind $(pwd):/repo flocs.sif \
           python /repo/sidereal_visibility_avg/main.py /repo/.github/testdata/test?.ms
 
+      - name: Run testcase2
+        run: |
+          singularity exec --bind $(pwd):/repo flocs.sif \
+          python /repo/sidereal_visibility_avg/main.py --dp3_uvw /repo/.github/testdata/test?.ms
