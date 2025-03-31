@@ -24,7 +24,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run --help on main.py
-        run: python sidereal_visibility_avg/main.py --help
+        run: python /repo/sidereal_visibility_avg/main.py --help
 
       - name: Run testcase
-        run: python sidereal_visibility_avg/main.py .github/testdata/test?.ms
+        run: python /repo/sidereal_visibility_avg/main.py .github/testdata/test?.ms
