@@ -4,4 +4,4 @@ scipy
 numba
 numpy
 psutil
-sklearn
+scikit-learn
