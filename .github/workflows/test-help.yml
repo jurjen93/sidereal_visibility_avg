@@ -23,11 +23,6 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Install system dependencies (if needed)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y some-package  # Replace with actual packages if needed
-
       - name: Run --help on main.py
         run: python sidereal_visibility_avg/main.py --help
 
