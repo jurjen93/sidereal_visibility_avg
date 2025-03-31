@@ -5,6 +5,8 @@ from os import system as run_command
 import sys
 from shutil import rmtree
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from time import sleep
+import gc
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
 from .utils.dysco import decompress
@@ -186,7 +188,7 @@ class Template:
 
         # Process each MS file in parallel
         for ms in self.mslist:
-            print(f'\nMapping: {ms}')
+            print(f'\nMapping baseline indices: {ms}')
 
             # Open the MS table and read columns
             with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(ms)}") as t:
@@ -244,6 +246,7 @@ class Template:
         with table(self.outname + "::ANTENNA", ack=False) as ants:
             baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
 
+        print("Resample UVW through interpolation")
         with table(self.outname, readonly=False, ack=False) as T:
             UVW = np.memmap(self.tmp_folder+'UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
             TIME = np.memmap(self.tmp_folder+'TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
@@ -258,7 +261,7 @@ class Template:
                     time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
 
             # Determine number of workers
-            num_workers = max(cpu_count()-3, 1)  # I/O-bound heuristic
+            num_workers = max(cpu_count()-1, 1)
 
             batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
 
@@ -281,12 +284,16 @@ class Template:
             UVW.flush()
             T.putcol("UVW", UVW)
 
+        print("\nCooling down...")
+        sleep(5)
+        gc.collect()
+
         # Make final mapping
         self.make_mapping_uvw()
 
     def make_mapping_uvw(self):
         """
-        Make mapping json files essential for efficient stacking based on UVW points
+        Update mapping json files essential for efficient and accurate UVW averaging
         """
 
         # Get baselines
@@ -307,7 +314,7 @@ class Template:
         else:
             UVW = np.memmap(self.tmp_folder+'UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
 
-        num_workers = min(cpu_count()-3, len(baselines))
+        num_workers = min(cpu_count()-1, len(baselines))
 
         print('\nMake final UVW mapping to output dataset')
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
@@ -323,6 +330,10 @@ class Template:
                     print(f'Baseline {baseline} generated an exception: {e}')
 
                 print_progress_bar(n + 1, len(baselines))
+
+        print("\nCooling down...")
+        sleep(5)
+        gc.collect()
 
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1):
         """

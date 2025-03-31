@@ -53,6 +53,7 @@ def main():
     if check_folder_exists(args.msout):
         print(f"{args.msout} already exists, will be overwritten")
         rmtree(args.msout)
+        time.sleep(5) # ensure that file is deleted with extra processing time
 
     # time averaging (upsampling factor)
     avg = 1
