@@ -3,3 +3,5 @@ astropy
 scipy
 numba
 numpy
+psutil
+scikit-learn
