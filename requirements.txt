@@ -3,3 +3,4 @@ astropy
 scipy
 numba
 numpy
+psutil
