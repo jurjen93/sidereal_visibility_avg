@@ -34,3 +34,4 @@ jobs:
         run: |
           singularity exec --bind $(pwd):/repo flocs.sif \
           python /repo/sidereal_visibility_avg/main.py /repo/.github/testdata/test?.ms
+
