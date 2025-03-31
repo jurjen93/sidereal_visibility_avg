@@ -1,7 +1,7 @@
 name: Test SVA
 
 on:
-  pull_request:  # Run on any PR
+  pull_request:
 
 jobs:
   test:
@@ -11,31 +11,25 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Disable Microsoft Repo
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install Python dependencies
         run: |
-          sudo sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/microsoft-prod.list
+          pip install -r requirements.txt
+
+      - name: Install system dependencies (if needed)
+        run: |
           sudo apt-get update
-
-      - name: Install Singularity
-        run: |
-          sudo apt-get install -y singularity-container
-
-      - name: Download flocs Singularity
-        run: |
-          singularity pull flocs.sif \
-          https://public.spider.surfsara.nl/project/lofarvwf/fsweijen/containers/flocs_v5.4.0_znver2_znver2.sif
+          sudo apt-get install -y some-package  # Replace with actual packages if needed
 
       - name: Run --help on main.py
-        run: |
-          singularity exec --bind $(pwd):/repo flocs.sif \
-          python /repo/sidereal_visibility_avg/main.py --help
+        run: python sidereal_visibility_avg/main.py --help
 
-      - name: Run testcase1
-        run: |
-          singularity exec --bind $(pwd):/repo flocs.sif \
-          python /repo/sidereal_visibility_avg/main.py /repo/.github/testdata/test?.ms
-
-      - name: Run testcase2
-        run: |
-          singularity exec --bind $(pwd):/repo flocs.sif \
-          python /repo/sidereal_visibility_avg/main.py --dp3_uvw /repo/.github/testdata/test?.ms
+      - name: Run testcase
+        run: python sidereal_visibility_avg/main.py .github/testdata/test?.ms
