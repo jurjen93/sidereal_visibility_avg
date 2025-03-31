@@ -236,6 +236,7 @@ def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
 
     for antpair in antpair_batch:
         # Get indices for the antenna pair
+        antpair = sorted(antpair)
         pair_idx = np.squeeze(np.argwhere(np.all(antennas == antpair, axis=1)))
         ref_pair_idx = np.squeeze(np.argwhere(np.all(ref_antennas == antpair, axis=1)))
 
