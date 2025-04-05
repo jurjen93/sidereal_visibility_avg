@@ -5,8 +5,8 @@ from os import system as run_command
 import sys
 from shutil import rmtree
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from time import sleep
 import gc
+from functools import partial
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
 from .utils.dysco import decompress
@@ -188,7 +188,7 @@ class Template:
 
         # Process each MS file in parallel
         for ms in self.mslist:
-            print(f'\nMapping baseline indices: {ms}')
+            print(f'\nMapping: {ms}')
 
             # Open the MS table and read columns
             with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(ms)}") as t:
@@ -209,9 +209,9 @@ class Template:
                     time_idxs = find_closest_index_list(uniq_time, ref_uniq_time)
 
                     # Map antennas and compute unique pairs
-                    antennas = np.c_[
-                        map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)]
+                    antennas = np.c_[map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)]
                     uniq_ant_pairs = np.unique(antennas, axis=0)
+                    antennas = np.sort(antennas, axis=1)
 
                     # Run parallel mapping
                     run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder)
@@ -273,19 +273,16 @@ class Template:
                 }
 
                 for future in as_completed(future_to_baseline):
-                    batch_start_idx = future_to_baseline[future]
                     try:
                         results = future.result()
-                        for row_idxs, uvws, b_idx, time in results:
+                        for row_idxs, uvws, baseline, time in results:
                             UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
-                    except Exception as e:
-                        print(f'Batch starting at index {batch_start_idx} generated an exception: {e}')
+                    except Exception:
+                        print(f"No data for baseline {baseline}")
 
             UVW.flush()
             T.putcol("UVW", UVW)
 
-        print("\nCooling down...")
-        sleep(5)
         gc.collect()
 
         # Make final mapping
@@ -317,22 +314,20 @@ class Template:
         num_workers = min(cpu_count()-1, len(baselines))
 
         print('\nMake final UVW mapping to output dataset')
+        msdir = '/'.join(self.mslist[0].split('/')[0:-1])
+        process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW)
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            future_to_baseline = {executor.submit(process_baseline_uvw, baseline,
-                                                  '/'.join(self.mslist[0].split('/')[0:-1]), UVW): baseline for baseline
-                                  in baselines}
+            future_to_baseline = {executor.submit(process_func, baseline): baseline for baseline in baselines}
 
             for n, future in enumerate(as_completed(future_to_baseline)):
                 baseline = future_to_baseline[future]
                 try:
                     future.result()  # Get the result
                 except Exception as e:
-                    print(f'Baseline {baseline} generated an exception: {e}')
+                    sys.exit(f'ERROR: Baseline {baseline} generated an exception: {e}')
 
                 print_progress_bar(n + 1, len(baselines))
 
-        print("\nCooling down...")
-        sleep(5)
         gc.collect()
 
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1):

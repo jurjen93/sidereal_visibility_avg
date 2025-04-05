@@ -237,8 +237,14 @@ def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
     mapping_batch = {}
 
     for antpair in antpair_batch:
+
+        if antpair[0] > antpair[1]:
+            inverse=True
+            antpair = sorted(antpair)
+        else:
+            inverse=False
+
         # Get indices for the antenna pair
-        antpair = sorted(antpair)
         pair_idx = np.squeeze(np.argwhere(np.all(antennas == antpair, axis=1)))
         ref_pair_idx = np.squeeze(np.argwhere(np.all(ref_antennas == antpair, axis=1)))
 
@@ -256,7 +262,7 @@ def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
         ref_pair_idx = ref_pair_idx[valid_time_idxs]
 
         # Create the mapping dictionary for each pair
-        mapping = {int(pair_idx[i]): int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
+        mapping = {int(pair_idx[i]): (-1 if inverse else 1) * int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
         mapping_batch[tuple(antpair)] = mapping  # Store in batch
 
     return mapping_batch
@@ -292,7 +298,7 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
                     mapping_batch = future.result()
                     # Write the JSON mappings after processing each batch
                     for antpair, mapping in mapping_batch.items():
-                        file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
+                        file_path = path.join(mapping_folder, '-'.join(map(str, sorted(antpair))) + '.json')
                         with open(file_path, 'w') as f:
                             json.dump(mapping, f)
                 except Exception as batch_error:
@@ -301,8 +307,6 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
     except Exception as e:
         print(f"An error occurred while processing or writing mappings: {e}")
 
-    print("\nCooling down...")
-    sleep(5)
     gc.collect()
 
 
@@ -315,24 +319,37 @@ def process_ms(ms):
 
 
 def process_baseline_uvw(baseline, folder, UVW):
-    """Parallel processing baseline"""
-
+    """Parallel processing of one baseline"""
     try:
-        if not folder:
-            folder = '.'
-        mapping_folder_baseline = sorted(
-            glob(folder + '/*_mapping/' + '-'.join([str(a) for a in baseline]) + '.json'))
-        idxs_ref = np.unique(
-            [idx for mapp in mapping_folder_baseline for idx in json.load(open(mapp)).values()])
-        uvw_ref = UVW[list(idxs_ref)]
-        for mapp in mapping_folder_baseline:
-            idxs = [int(i) for i in json.load(open(mapp)).keys()]
-            ms = glob('/'.join(mapp.split('/')[0:-1]).replace("_baseline_mapping", ""))[0]
+        folder = folder or '.'
+        baseline_str = '-'.join(map(str, baseline))
+        mapping_files = sorted(glob(f'{folder}/*_mapping/{baseline_str}.json'))
+
+        if not mapping_files:
+            return
+
+        # Load all mappings and collect idxs_ref
+        idxs_ref = set()
+        mappings = []
+        for path in mapping_files:
+            with open(path) as f:
+                mapping = json.load(f)
+                mappings.append((path, mapping))
+                idxs_ref.update(mapping.values())
+
+        idxs_ref = np.unique(np.fromiter(idxs_ref, dtype=int))
+        uvw_ref = UVW[np.abs(idxs_ref)]
+
+        for path, mapping in mappings:
+            idxs = np.fromiter((int(i) for i in mapping.keys()), dtype=int)
+            ms_dir = '/'.join(path.split('/')[:-1]).replace("_baseline_mapping", "")
+            ms = glob(ms_dir)[0]
             uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
-            idxs_new = [int(i) for i in np.array(idxs_ref)[
-                list(find_closest_index_multi_array(uvw_in[:, 0:2], uvw_ref[:, 0:2]))]]
-            with open(mapp, 'w+') as f:
-                json.dump(dict(zip(idxs, idxs_new)), f)
+            idxs_new = np.array(idxs_ref)[find_closest_index_multi_array(uvw_in[:, :2], uvw_ref[:, :2])]
+            new_mapping = dict(zip(map(str, idxs), idxs_new.astype(int).tolist()))
+            with open(path, 'w') as f:
+                json.dump(new_mapping, f)
+
     except Exception as exc:
         print(f'Baseline {baseline} generated an exception: {exc}')
 
@@ -361,5 +378,5 @@ def process_baseline_int(baseline_indices, baselines, mslist):
 
             time = np.append(np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
 
-        results.append((list(np.unique(row_idxs)), uvw, b_idx, time))
+        results.append((list(np.unique(np.abs(row_idxs))), uvw, baseline, time))
     return results

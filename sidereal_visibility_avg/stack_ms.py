@@ -127,6 +127,15 @@ class Stack:
                     print('Read baseline mapping')
                     indices, ref_indices = read_mapping(mapping_folder)
 
+                    # Only complex conjugate check for DATA columns
+                    if "DATA" in col:
+                        comp_conj = np.array(ref_indices) < 0
+                        print(f"{col} needs to complex conjugate {np.sum(comp_conj)} values.")
+                    else:
+                        comp_conj = np.array([0])
+
+                    ref_indices = list(np.abs(ref_indices))
+
                     if len(indices)==0:
                         sys.exit('ERROR: cannot find *_baseline_mapping folders')
 
@@ -137,6 +146,10 @@ class Stack:
                         print_progress_bar(chunk_idx, chunks+1)
 
                         data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+
+                        # Take complex conjugate for inverted baselines
+                        if np.sum(comp_conj) > 0:
+                            data[comp_conj] = np.conj(data[comp_conj])
 
                         if col=='DATA':
                             # convert NaN to 0
