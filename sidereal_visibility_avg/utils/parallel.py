@@ -237,8 +237,14 @@ def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
     mapping_batch = {}
 
     for antpair in antpair_batch:
+
+        if antpair[0] > antpair[1]:
+            inverse=True
+            antpair = sorted(antpair)
+        else:
+            inverse=False
+
         # Get indices for the antenna pair
-        antpair = sorted(antpair)
         pair_idx = np.squeeze(np.argwhere(np.all(antennas == antpair, axis=1)))
         ref_pair_idx = np.squeeze(np.argwhere(np.all(ref_antennas == antpair, axis=1)))
 
@@ -256,7 +262,7 @@ def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
         ref_pair_idx = ref_pair_idx[valid_time_idxs]
 
         # Create the mapping dictionary for each pair
-        mapping = {int(pair_idx[i]): int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
+        mapping = {int(pair_idx[i]): (-1 if not inverse else 1) * int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
         mapping_batch[tuple(antpair)] = mapping  # Store in batch
 
     return mapping_batch
@@ -292,7 +298,7 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
                     mapping_batch = future.result()
                     # Write the JSON mappings after processing each batch
                     for antpair, mapping in mapping_batch.items():
-                        file_path = path.join(mapping_folder, '-'.join(map(str, antpair)) + '.json')
+                        file_path = path.join(mapping_folder, '-'.join(map(str, sorted(antpair))) + '.json')
                         with open(file_path, 'w') as f:
                             json.dump(mapping, f)
                 except Exception as batch_error:

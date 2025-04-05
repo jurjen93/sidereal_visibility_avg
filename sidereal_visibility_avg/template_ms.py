@@ -209,9 +209,9 @@ class Template:
                     time_idxs = find_closest_index_list(uniq_time, ref_uniq_time)
 
                     # Map antennas and compute unique pairs
-                    antennas = np.c_[
-                        map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)]
+                    antennas = np.c_[map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)]
                     uniq_ant_pairs = np.unique(antennas, axis=0)
+                    antennas = np.sort(antennas, axis=1)
 
                     # Run parallel mapping
                     run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder)
@@ -279,7 +279,7 @@ class Template:
                         for row_idxs, uvws, b_idx, time in results:
                             UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
                     except Exception as e:
-                        print(f'Batch starting at index {batch_start_idx} generated an exception: {e}')
+                        sys.exit(f'ERROR: Batch starting at index {batch_start_idx} generated an exception: {e}')
 
             UVW.flush()
             T.putcol("UVW", UVW)
