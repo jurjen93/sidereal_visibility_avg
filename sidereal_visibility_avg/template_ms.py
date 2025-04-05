@@ -188,7 +188,7 @@ class Template:
 
         # Process each MS file in parallel
         for ms in self.mslist:
-            print(f'\nMapping baseline indices: {ms}')
+            print(f'\nMapping: {ms}')
 
             # Open the MS table and read columns
             with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(ms)}") as t:
