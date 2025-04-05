@@ -209,9 +209,9 @@ class Template:
                     time_idxs = find_closest_index_list(uniq_time, ref_uniq_time)
 
                     # Map antennas and compute unique pairs
-                    antennas = np.c_[
-                        map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)]
+                    antennas = np.c_[map_array_dict(t.getcol("ANTENNA1"), id_map), map_array_dict(t.getcol("ANTENNA2"), id_map)]
                     uniq_ant_pairs = np.unique(antennas, axis=0)
+                    antennas = np.sort(antennas, axis=1)
 
                     # Run parallel mapping
                     run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder)
@@ -276,16 +276,15 @@ class Template:
                     batch_start_idx = future_to_baseline[future]
                     try:
                         results = future.result()
-                        for row_idxs, uvws, b_idx, time in results:
+                        for row_idxs, uvws, baseline, time in results:
                             UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
                     except Exception as e:
-                        print(f'Batch starting at index {batch_start_idx} generated an exception: {e}')
+                        print(baseline)
+                        pass
 
             UVW.flush()
             T.putcol("UVW", UVW)
 
-        print("\nCooling down...")
-        sleep(5)
         gc.collect()
 
         # Make final mapping
@@ -331,8 +330,6 @@ class Template:
 
                 print_progress_bar(n + 1, len(baselines))
 
-        print("\nCooling down...")
-        sleep(5)
         gc.collect()
 
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1):

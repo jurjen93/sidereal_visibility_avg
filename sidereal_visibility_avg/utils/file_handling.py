@@ -31,7 +31,7 @@ def read_mapping(mapping_folder):
             total_map.update(result)
 
     # Convert keys and values to integers and sort
-    total_map = {int(k): int(v) for k, v in total_map.items()}
+    total_map = {int(k): v for k, v in total_map.items()}
     sorted_total_map = dict(sorted(total_map.items()))
 
     indices = list(sorted_total_map.keys())

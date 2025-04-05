@@ -7,6 +7,11 @@ import time
 from argparse import ArgumentParser
 from shutil import rmtree
 
+# Logging
+from .utils.logger import SVALogger
+sys.stdout = SVALogger("sva_log.txt")
+sys.stderr = sys.stdout
+
 from .utils.clean import clean_binary_files, clean_mapping_files
 from .utils.dysco import compress
 from .utils.file_handling import check_folder_exists
