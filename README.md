@@ -9,7 +9,7 @@ Basic example:
 ```sva --msout <MS_OUTPUT_NAME> *.ms```
 
 What the code does:
-1) Making a MeasurementSet template, which includes includes all baselines, frequency, and new time resolution covering all input MS in Local Sidereal Time (LST).
+1) Make a MeasurementSet template, which includes includes all baselines, frequency, and new time resolution covering all input MS in Local Sidereal Time (LST).
 
 2) Map baselines from input MS to output MS.
     This step makes *baseline_mapping folders with the baseline mappings in json files.
