@@ -276,10 +276,10 @@ class Template:
                     batch_start_idx = future_to_baseline[future]
                     try:
                         results = future.result()
-                        for row_idxs, uvws, b_idx, time in results:
+                        for row_idxs, uvws, baseline, time in results:
                             UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
                     except Exception as e:
-                        print(b_idx)
+                        print(baseline)
                         sys.exit(f'ERROR: Batch starting at index {batch_start_idx} generated an exception: {e}')
 
             UVW.flush()

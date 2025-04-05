@@ -365,5 +365,5 @@ def process_baseline_int(baseline_indices, baselines, mslist):
 
             time = np.append(np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
 
-        results.append((list(np.unique(row_idxs)), uvw, b_idx, time))
+        results.append((list(np.unique(row_idxs)), uvw, baseline, time))
     return results
