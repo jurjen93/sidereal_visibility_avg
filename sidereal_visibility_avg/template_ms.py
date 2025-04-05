@@ -273,12 +273,11 @@ class Template:
                 }
 
                 for future in as_completed(future_to_baseline):
-                    batch_start_idx = future_to_baseline[future]
                     try:
                         results = future.result()
                         for row_idxs, uvws, baseline, time in results:
                             UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
-                    except Exception as e:
+                    except Exception:
                         print(f"No data for baseline {'-'.join(baseline)}")
 
             UVW.flush()
