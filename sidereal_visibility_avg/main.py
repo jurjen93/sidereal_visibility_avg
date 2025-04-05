@@ -76,13 +76,14 @@ def main():
         time_res = None
         print(f"Additional time sampling factor {avg}\n")
 
+    # Make template
     t = Template(args.msin, args.msout, tmp_folder=args.tmp)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg)
     if args.skip_uvw_mapping:
         print('--skip_uvw_mapping requested --> use already existing mapping files')
-    elif args.dp3_uvw:
+    elif args.dp3_uvw: # Use DP3 for making UVW axis
         t.calculate_uvw()
-    else:
+    else: # Nearest neighbour interpolation for UVW
         t.interpolate_uvw()
     print("\n############\nTemplate creation completed\n############")
 
