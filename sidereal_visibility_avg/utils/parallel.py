@@ -330,6 +330,7 @@ def process_baseline_uvw(baseline, folder, UVW):
             [idx for mapp in mapping_folder_baseline for idx in json.load(open(mapp)).values()])
         uvw_ref = UVW[list(idxs_ref)]
         for mapp in mapping_folder_baseline:
+            print(mapp)
             idxs = [int(i) for i in json.load(open(mapp)).keys()]
             ms = glob('/'.join(mapp.split('/')[0:-1]).replace("_baseline_mapping", ""))[0]
             uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
