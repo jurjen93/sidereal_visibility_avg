@@ -284,8 +284,6 @@ class Template:
             UVW.flush()
             T.putcol("UVW", UVW)
 
-        print("\nCooling down...")
-        sleep(5)
         gc.collect()
 
         # Make final mapping
@@ -331,8 +329,6 @@ class Template:
 
                 print_progress_bar(n + 1, len(baselines))
 
-        print("\nCooling down...")
-        sleep(5)
         gc.collect()
 
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1):

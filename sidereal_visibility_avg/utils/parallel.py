@@ -262,7 +262,7 @@ def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
         ref_pair_idx = ref_pair_idx[valid_time_idxs]
 
         # Create the mapping dictionary for each pair
-        mapping = {int(pair_idx[i]): (-1 if not inverse else 1) * int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
+        mapping = {int(pair_idx[i]): (-1 if inverse else 1) * int(ref_pair_idx[i]) for i in range(min(len(pair_idx), len(ref_pair_idx)))}
         mapping_batch[tuple(antpair)] = mapping  # Store in batch
 
     return mapping_batch
@@ -307,8 +307,6 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
     except Exception as e:
         print(f"An error occurred while processing or writing mappings: {e}")
 
-    print("\nCooling down...")
-    sleep(5)
     gc.collect()
 
 
