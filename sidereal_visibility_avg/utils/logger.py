@@ -7,7 +7,7 @@ class SVALogger:
         self.log = open(log_path, "w", buffering=1)
 
     def write(self, message):
-        timestamp = time.strftime("%H:%M:%S %d-%m-%Y")
+        timestamp = time.strftime("%d-%m-%Y %H:%M:%S")
         if message.strip():  # Only log non-empty messages
             if ("% Complete" in message or "Elapsed time" in message
                     or "----" in message or "===" in message or "####" in message):
