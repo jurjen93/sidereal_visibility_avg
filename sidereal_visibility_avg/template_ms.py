@@ -280,7 +280,7 @@ class Template:
                             UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
                     except Exception as e:
                         print(baseline)
-                        sys.exit(f'ERROR: Batch starting at index {batch_start_idx} generated an exception: {e}')
+                        pass
 
             UVW.flush()
             T.putcol("UVW", UVW)
