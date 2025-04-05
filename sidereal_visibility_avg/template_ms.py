@@ -315,7 +315,7 @@ class Template:
 
         print('\nMake final UVW mapping to output dataset')
         msdir = '/'.join(self.mslist[0].split('/')[0:-1])
-        process_func = partial(process_baseline_uvw, ms_dir=msdir, UVW=UVW)
+        process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW)
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             future_to_baseline = {executor.submit(process_func, baseline): baseline for baseline in baselines}
 
