@@ -5,8 +5,8 @@ from os import system as run_command
 import sys
 from shutil import rmtree
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from time import sleep
 import gc
+from functools import partial
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
 from .utils.dysco import decompress
@@ -314,17 +314,17 @@ class Template:
         num_workers = min(cpu_count()-1, len(baselines))
 
         print('\nMake final UVW mapping to output dataset')
+        msdir = '/'.join(self.mslist[0].split('/')[0:-1])
+        process_func = partial(process_baseline_uvw, ms_dir=msdir, UVW=UVW)
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            future_to_baseline = {executor.submit(process_baseline_uvw, baseline,
-                                                  '/'.join(self.mslist[0].split('/')[0:-1]), UVW): baseline for baseline
-                                  in baselines}
+            future_to_baseline = {executor.submit(process_func, baseline): baseline for baseline in baselines}
 
             for n, future in enumerate(as_completed(future_to_baseline)):
                 baseline = future_to_baseline[future]
                 try:
                     future.result()  # Get the result
                 except Exception as e:
-                    print(f'Baseline {baseline} generated an exception: {e}')
+                    sys.exit(f'ERROR: Baseline {baseline} generated an exception: {e}')
 
                 print_progress_bar(n + 1, len(baselines))
 
