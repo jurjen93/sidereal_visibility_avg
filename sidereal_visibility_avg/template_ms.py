@@ -278,7 +278,7 @@ class Template:
                         for row_idxs, uvws, baseline, time in results:
                             UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
                     except Exception:
-                        print(f"No data for baseline {'-'.join(baseline)}")
+                        print(f"No data for baseline {baseline}")
 
             UVW.flush()
             T.putcol("UVW", UVW)
