@@ -320,6 +320,7 @@ def process_ms(ms):
 
 def process_baseline_uvw(baseline, folder, UVW):
     """Parallel processing of one baseline"""
+
     try:
         folder = folder or '.'
         baseline_str = '-'.join(map(str, baseline))
@@ -340,6 +341,7 @@ def process_baseline_uvw(baseline, folder, UVW):
         idxs_ref = np.unique(np.fromiter(idxs_ref, dtype=int))
         uvw_ref = UVW[np.abs(idxs_ref)]
 
+        # Loop over mapping files with nearest neighbouring
         for path, mapping in mappings:
             idxs = np.fromiter((int(i) for i in mapping.keys()), dtype=int)
             ms_dir = '/'.join(path.split('/')[:-1]).replace("_baseline_mapping", "")

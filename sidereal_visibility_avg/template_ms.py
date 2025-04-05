@@ -297,6 +297,7 @@ class Template:
         with table(self.outname + "::ANTENNA", ack=False) as ants:
             baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
 
+        # Make memmaps if not exist yet
         if not path.exists(self.tmp_folder+'UVW.tmp.dat'):
             with table(self.outname, readonly=False, ack=False) as T:
                 UVW = np.memmap(self.tmp_folder+'UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
@@ -311,9 +312,9 @@ class Template:
         else:
             UVW = np.memmap(self.tmp_folder+'UVW.tmp.dat', dtype=np.float32).reshape(-1, 3)
 
-        num_workers = min(cpu_count()-1, len(baselines))
-
+        # Refine UVW mapping from baseline input to baseline output
         print('\nMake final UVW mapping to output dataset')
+        num_workers = min(cpu_count()-1, len(baselines))
         msdir = '/'.join(self.mslist[0].split('/')[0:-1])
         process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW)
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
