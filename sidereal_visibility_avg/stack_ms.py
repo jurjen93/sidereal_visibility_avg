@@ -134,6 +134,8 @@ class Stack:
                     else:
                         comp_conj = np.array([0])
 
+                    ref_indices = list(np.abs(ref_indices))
+
                     if len(indices)==0:
                         sys.exit('ERROR: cannot find *_baseline_mapping folders')
 

@@ -324,18 +324,14 @@ def process_baseline_uvw(baseline, folder, UVW):
     try:
         if not folder:
             folder = '.'
-        mapping_folder_baseline = sorted(
-            glob(folder + '/*_mapping/' + '-'.join([str(a) for a in baseline]) + '.json'))
-        idxs_ref = np.unique(
-            [idx for mapp in mapping_folder_baseline for idx in json.load(open(mapp)).values()])
-        uvw_ref = UVW[list(idxs_ref)]
+        mapping_folder_baseline = sorted(glob(folder + '/*_mapping/' + '-'.join([str(a) for a in baseline]) + '.json'))
+        idxs_ref = np.unique([idx for mapp in mapping_folder_baseline for idx in json.load(open(mapp)).values()])
+        uvw_ref = UVW[list(np.abs(idxs_ref))]
         for mapp in mapping_folder_baseline:
-            print(mapp)
             idxs = [int(i) for i in json.load(open(mapp)).keys()]
             ms = glob('/'.join(mapp.split('/')[0:-1]).replace("_baseline_mapping", ""))[0]
             uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
-            idxs_new = [int(i) for i in np.array(idxs_ref)[
-                list(find_closest_index_multi_array(uvw_in[:, 0:2], uvw_ref[:, 0:2]))]]
+            idxs_new = [int(i) for i in np.array(idxs_ref)[list(find_closest_index_multi_array(uvw_in[:, 0:2], uvw_ref[:, 0:2]))]]
             with open(mapp, 'w+') as f:
                 json.dump(dict(zip(idxs, idxs_new)), f)
     except Exception as exc:
@@ -366,5 +362,5 @@ def process_baseline_int(baseline_indices, baselines, mslist):
 
             time = np.append(np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
 
-        results.append((list(np.unique(row_idxs)), uvw, baseline, time))
+        results.append((list(np.unique(np.abs(row_idxs))), uvw, baseline, time))
     return results
