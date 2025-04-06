@@ -148,8 +148,10 @@ class Stack:
                         data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
 
                         # Take complex conjugate for inverted baselines
-                        if np.sum(comp_conj) > 0:
-                            data[comp_conj] = np.conj(data[comp_conj])
+                        if "DATA" in col:
+                            comp_conj_mask = comp_conj[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
+                            if np.sum(comp_conj_mask) > 0:
+                                data[comp_conj_mask] = np.conj(data[comp_conj_mask])
 
                         if col=='DATA':
                             # convert NaN to 0
