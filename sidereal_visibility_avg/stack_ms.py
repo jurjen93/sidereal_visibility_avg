@@ -132,7 +132,7 @@ class Stack:
                         comp_conj = np.array(ref_indices) < 0
                         print(f"{col} needs to complex conjugate {np.sum(comp_conj)} values.")
                     else:
-                        comp_conj = np.array([0])
+                        comp_conj = None
 
                     ref_indices = list(np.abs(ref_indices))
 
@@ -148,7 +148,7 @@ class Stack:
                         data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
 
                         # Take complex conjugate for inverted baselines
-                        if "DATA" in col:
+                        if comp_conj is not None:
                             comp_conj_mask = comp_conj[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
                             if np.sum(comp_conj_mask) > 0:
                                 data[comp_conj_mask] = np.conj(data[comp_conj_mask])
