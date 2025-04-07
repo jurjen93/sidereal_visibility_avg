@@ -5,3 +5,4 @@ numba
 numpy
 psutil
 scikit-learn
+numexpr
