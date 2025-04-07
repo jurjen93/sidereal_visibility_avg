@@ -105,6 +105,76 @@ def sum_arrays(A, B):
     return out
 
 
+@njit
+def nanmean_excluding_zeros_flat(a):
+    """
+    Compute the mean of a 1D array over values that are neither NaN nor 0.
+    """
+    s = 0.0
+    count = 0
+    for i in range(a.shape[0]):
+        val = a[i]
+        # Skip if NaN or exactly 0
+        if not np.isnan(val) and val != 0:
+            s += val
+            count += 1
+    if count == 0:
+        return np.nan
+    else:
+        return s / count
+
+
+@njit
+def nanmean_excluding_zeros_axis0(data):
+    """
+    Compute the mean along axis 0 for a 2D array 'data' where each column’s
+    mean is computed over values that are not NaN and not 0.
+    """
+    n, m = data.shape
+    out = np.empty(m, dtype=data.dtype)
+    for j in range(m):
+        s = 0.0
+        count = 0
+        for i in range(n):
+            val = data[i, j]
+            if not np.isnan(val) and val != 0:
+                s += val
+                count += 1
+        if count == 0:
+            out[j] = np.nan
+        else:
+            out[j] = s / count
+    return out
+
+
+def nozeros_nanmean(a, axis=None):
+    """
+    Compute the mean of an array that are neither NaN nor 0.
+
+    If axis is None, returns a scalar.
+    If an axis is specified, the mean is computed along that axis.
+    This version uses Numba for very fast execution.
+    """
+    # Ensure array is contiguous
+    a = np.ascontiguousarray(a)
+
+    if axis is None:
+        a_flat = a.ravel()
+        return nanmean_excluding_zeros_flat(a_flat)
+    else:
+        # Move the target axis to the front so that we average along axis 0.
+        a_moved = np.moveaxis(a, axis, 0)
+        n = a_moved.shape[0]
+        # Reshape to 2D: shape (n, prod(other_dims))
+        m = a_moved.size // n
+        data_2d = a_moved.reshape(n, m)
+        # Compute mean along axis 0 for each "column"
+        out_flat = nanmean_excluding_zeros_axis0(data_2d)
+        # Reshape to original shape with the reduced axis removed.
+        out_shape = a.shape[:axis] + a.shape[axis + 1:]
+        return out_flat.reshape(out_shape)
+
+
 def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
     """
     Process a batch of antenna pairs, creating JSON mappings.

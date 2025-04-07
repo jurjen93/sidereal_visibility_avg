@@ -2,6 +2,7 @@ import json
 from os import path
 from glob import glob
 from concurrent.futures import ThreadPoolExecutor
+from numpy import array
 
 def check_folder_exists(folder_path):
     """
@@ -34,7 +35,7 @@ def read_mapping(mapping_folder):
     total_map = {int(k): v for k, v in total_map.items()}
     sorted_total_map = dict(sorted(total_map.items()))
 
-    indices = list(sorted_total_map.keys())
-    ref_indices = list(sorted_total_map.values())
+    indices = array(list(sorted_total_map.keys()))
+    ref_indices = array(list(sorted_total_map.values()))
 
     return indices, ref_indices

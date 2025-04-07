@@ -13,7 +13,7 @@ from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
-from .utils.parallel import multiply_arrays, sum_arrays
+from .utils.parallel import multiply_arrays, sum_arrays, nozeros_nanmean
 
 # Set cores
 if ne.detect_number_of_cores()>1:
@@ -138,7 +138,7 @@ class Stack:
                     else:
                         comp_conj = None
 
-                    ref_indices = list(np.abs(ref_indices))
+                    ref_indices = np.abs(ref_indices)
 
                     if len(indices)==0:
                         sys.exit('ERROR: cannot find *_baseline_mapping folders')
@@ -174,13 +174,13 @@ class Stack:
                             data = data[..., 0]
 
                         # Get indices
-                        row_idxs_new = ref_indices[start:self.chunk_size * (chunk_idx+1)]
-                        row_idxs = [int(i - start) for i in indices[start:self.chunk_size * (chunk_idx+1)]]
+                        row_idxs_new = ref_indices[start: start + self.chunk_size]
+                        row_idxs = (indices[start: start + self.chunk_size] - start).astype(np.intp)
 
                         if col == 'UVW':
 
-                            weights = t.getcol("WEIGHT_SPECTRUM", startrow=start, nrow=self.chunk_size)
-                            weights = add_axis(np.nanmean(weights[row_idxs, :, 0], axis=1), 3)
+                            weights = t.getcol("WEIGHT_SPECTRUM", startrow=start, nrow=self.chunk_size)[..., 0]
+                            weights = add_axis(nozeros_nanmean(weights[row_idxs, :], axis=1), 3)
 
                             # Stacking
                             subd = data[row_idxs, :]
