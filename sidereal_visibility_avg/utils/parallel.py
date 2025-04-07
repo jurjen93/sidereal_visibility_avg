@@ -5,7 +5,6 @@ from glob import glob
 from multiprocessing import cpu_count
 from os import path
 import gc
-from time import sleep
 
 import numpy as np
 from numba import jit, njit, prange, set_num_threads
@@ -14,83 +13,23 @@ from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 
 # Ensure some cores free
-cpucount = max(cpu_count() - 1, 1)
+cpucount = min(max(cpu_count() - 1, 1), 64)
 set_num_threads(cpucount)
 
 
-@jit(nopython=True, parallel=True)
+@njit(parallel=True)
 def replace_nan(arr):
     for i in prange(arr.shape[0]):
         arr[i][np.isnan(arr[i])] = 0.0
     return arr
 
 
-@jit(nopython=True, parallel=True)
-def inplace_sum_1d(new_data, data, row_idxs):
-    """
-    Update array at specified indices by adding corresponding values from `data`.
-    Uses Numba for efficient parallel computation.
-
-    Parameters:
-    - new_data: 1D NumPy array to update.
-    - data: 1D NumPy array with values to add.
-    - row_idxs: 1D array of row indices in `new_data`.
-    """
-    for i in prange(len(row_idxs)):
-        row = row_idxs[i]
-        new_data[row] += data[i]
-
-
-@jit(nopython=True, parallel=True)
-def inplace_sum_2d(new_data, data, row_idxs_new, freq_idxs, row_idxs):
-    """
-    Update array at specified indices by adding corresponding values from `data`.
-    Uses Numba for efficient parallel computation.
-
-    Parameters:
-    - new_data: 2D NumPy array to update.
-    - data: 2D NumPy array with values to add.
-    - row_idxs_new: 1D array of row indices in `new_data`.
-    - freq_idxs: 1D array of column indices in `new_data`.
-    - row_idxs: 1D array of row indices in `data`.
-    """
-    for i in prange(len(row_idxs_new)):
-        row = row_idxs_new[i]
-        row2 = row_idxs[i]
-        for j in prange(len(freq_idxs)):
-            col = freq_idxs[j]
-            new_data[row, col] += data[row2, j]
-
-
-@jit(nopython=True, parallel=True)
-def inplace_multiply(new_data, data, row_idxs_new, freq_idxs, row_idxs):
-    """
-    Update array at specified indices by multiplying corresponding values from `data`.
-    Uses Numba for efficient parallel computation.
-
-    Parameters:
-    - new_data: 2D NumPy array to update.
-    - data: 2D NumPy array with values to multiply.
-    - row_idxs_new: 1D array of row indices in `new_data`.
-    - freq_idxs: 1D array of column indices in `new_data`.
-    - row_idxs: 1D array of row indices in `data`.
-    """
-    for i in prange(len(row_idxs_new)):
-        row = row_idxs_new[i]
-        row2 = row_idxs[i]
-        for j in prange(len(freq_idxs)):
-            col = freq_idxs[j]
-            new_data[row, col] *= data[row2, j]
-
-
 @njit(parallel=True)
 def multiply_flat_arrays_numba(A_flat, B_flat, out_flat):
     """
     Numba kernel that multiplies two flattened arrays into a flattened output.
-    A_flat, B_flat, out_flat must all be 1D and of the same size.
     """
-    n = A_flat.size
-    for i in prange(n):
+    for i in prange(A_flat.size):
         out_flat[i] = A_flat[i] * B_flat[i]
 
 
@@ -109,6 +48,7 @@ def multiply_arrays(A, B):
     out : np.ndarray
         The elementwise product of A and B.
     """
+
     # Ensure A and B have the same shape
     assert A.shape == B.shape, "Arrays must have the same shape"
 
@@ -129,20 +69,21 @@ def multiply_arrays(A, B):
     return out
 
 
-@jit(nopython=True, parallel=True)
+@njit(parallel=True)
 def sum_flat_arrays_numba(A_flat, B_flat, out_flat):
     """
     Numba kernel that sums two flattened arrays into a flattened output.
+    A_flat, B_flat, out_flat must all be 1D and of the same size.
     """
-    n = A_flat.size
-    for i in prange(n):
+    for i in prange(A_flat.size):
         out_flat[i] = A_flat[i] + B_flat[i]
 
 
 def sum_arrays(A, B):
     """
-    Sums two NumPy arrays of any shape (A and B) elementwise.
-    Uses Numba with nopython=True, parallel=True on flattened data.
+    Sums two NumPy arrays elementwise.
+    Supports broadcasting when needed.
+    Uses Numba with parallel=True on flattened data.
     """
     # Make sure they have the same shape
     assert A.shape == B.shape, "Arrays must have the same shape"
@@ -164,69 +105,74 @@ def sum_arrays(A, B):
     return out
 
 
-@njit(parallel=True)
-def sum_chunks(result, array1, array2, start_indices, end_indices):
+@njit
+def nanmean_excluding_zeros_flat(a):
     """
-    Numba-compiled function to sum chunks of arrays.
+    Compute the mean of a 1D array over values that are neither NaN nor 0.
     """
-    for i in prange(len(start_indices)):
-        start, end = start_indices[i], end_indices[i]
-        for j in range(start, end):
-            result[j] = array1[j] + array2[j]  # Avoid slicing for better efficiency
-
-
-def sum_arrays_chunkwise_old(array1, array2, chunk_size=1000, un_memmap=True):
-    """
-    Sums two arrays in chunks using joblib for parallel processing.
-
-    :param:
-        - array1: np.ndarray or np.memmap
-        - array2: np.ndarray or np.memmap
-        - chunk_size: int, size of each chunk
-        - n_jobs: int, number of jobs for parallel processing (-1 means using all processors)
-        - un_memmap: bool, whether to convert memmap arrays to regular arrays if they fit in memory
-
-    :return:
-        - np.ndarray or np.memmap: result array which is the sum of array1 and array2
-    """
-
-    # Ensure arrays have the same length
-    if len(array1) != len(array2):
-        raise ValueError("Arrays must have the same length")
-
-    n = len(array1)
-
-    # Adjust chunk size for large arrays
-    chunk_size = min(chunk_size, n)
-
-    # Optionally convert memmap arrays to regular arrays
-    def try_convert_to_array(arr):
-        if un_memmap and isinstance(arr, np.memmap):
-            try:
-                return np.array(arr)
-            except MemoryError:
-                return arr  # Fallback to memmap
-        return arr
-
-    array1 = try_convert_to_array(array1)
-    array2 = try_convert_to_array(array2)
-
-    # Determine result array type
-    if isinstance(array1, np.memmap) or isinstance(array2, np.memmap):
-        temp_file = tempfile.NamedTemporaryFile(delete=False)
-        result_array = np.memmap(temp_file.name, dtype=array1.dtype, mode='w+', shape=array1.shape)
+    s = 0.0
+    count = 0
+    for i in range(a.shape[0]):
+        val = a[i]
+        # Skip if NaN or exactly 0
+        if not np.isnan(val) and val != 0:
+            s += val
+            count += 1
+    if count == 0:
+        return np.nan
     else:
-        result_array = np.empty_like(array1)
+        return s / count
 
-    # Create chunk indices
-    start_indices = np.arange(0, n, chunk_size)
-    end_indices = np.minimum(start_indices + chunk_size, n)
 
-    # Use Numba for summing chunks
-    sum_chunks(result_array, array1, array2, start_indices, end_indices)
+@njit
+def nanmean_excluding_zeros_axis0(data):
+    """
+    Compute the mean along axis 0 for a 2D array 'data' where each column’s
+    mean is computed over values that are not NaN and not 0.
+    """
+    n, m = data.shape
+    out = np.empty(m, dtype=data.dtype)
+    for j in range(m):
+        s = 0.0
+        count = 0
+        for i in range(n):
+            val = data[i, j]
+            if not np.isnan(val) and val != 0:
+                s += val
+                count += 1
+        if count == 0:
+            out[j] = np.nan
+        else:
+            out[j] = s / count
+    return out
 
-    # If a temporary file was created, return the memmap; otherwise, return the array
-    return result_array
+
+def nozeros_nanmean(a, axis=None):
+    """
+    Compute the mean of an array that are neither NaN nor 0.
+
+    If axis is None, returns a scalar.
+    If an axis is specified, the mean is computed along that axis.
+    This version uses Numba for very fast execution.
+    """
+    # Ensure array is contiguous
+    a = np.ascontiguousarray(a)
+
+    if axis is None:
+        a_flat = a.ravel()
+        return nanmean_excluding_zeros_flat(a_flat)
+    else:
+        # Move the target axis to the front so that we average along axis 0.
+        a_moved = np.moveaxis(a, axis, 0)
+        n = a_moved.shape[0]
+        # Reshape to 2D: shape (n, prod(other_dims))
+        m = a_moved.size // n
+        data_2d = a_moved.reshape(n, m)
+        # Compute mean along axis 0 for each "column"
+        out_flat = nanmean_excluding_zeros_axis0(data_2d)
+        # Reshape to original shape with the reduced axis removed.
+        out_shape = a.shape[:axis] + a.shape[axis + 1:]
+        return out_flat.reshape(out_shape)
 
 
 def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
