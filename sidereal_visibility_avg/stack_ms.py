@@ -149,21 +149,24 @@ class Stack:
                     for chunk_idx in range(chunks):
                         print_progress_bar(chunk_idx, chunks+1)
 
-                        data = t.getcol(col, startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                        start = chunk_idx * self.chunk_size
+                        end = start + self.chunk_size
+
+                        data = t.getcol(col, startrow=start, nrow=self.chunk_size)
 
                         # Take complex conjugate for inverted baselines
                         if comp_conj is not None:
-                            comp_conj_mask = comp_conj[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
-                            if np.sum(comp_conj_mask) > 0:
-                                data[comp_conj_mask] = np.conj(data[comp_conj_mask])
+                            comp_conj_mask = comp_conj[start:end]
+                            if np.any(comp_conj_mask):
+                                np.conjugate(data[comp_conj_mask], out=data[comp_conj_mask])
 
                         if col=='DATA':
                             # convert NaN to 0
                             data[np.isnan(data)] = 0.
 
                             # Multiply with weight_spectrum for weighted average
-                            weights = t.getcol('WEIGHT_SPECTRUM', startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)[..., 0][..., np.newaxis]
-                            data = ne.evaluate("data * weights")
+                            weights = t.getcol('WEIGHT_SPECTRUM', startrow=start, nrow=self.chunk_size)[..., 0][..., np.newaxis]
+                            data = ne.evaluate("data * weights") # ne.evaluate due to shape mismatch
                             del weights
 
                         # Reduce to one polarisation, since weights have same values for other polarisations
@@ -171,23 +174,23 @@ class Stack:
                             data = data[..., 0]
 
                         # Get indices
-                        row_idxs_new = ref_indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]
-                        row_idxs = [int(i - chunk_idx * self.chunk_size) for i in indices[chunk_idx * self.chunk_size:self.chunk_size * (chunk_idx+1)]]
+                        row_idxs_new = ref_indices[start:self.chunk_size * (chunk_idx+1)]
+                        row_idxs = [int(i - start) for i in indices[start:self.chunk_size * (chunk_idx+1)]]
 
                         if col == 'UVW':
 
-                            weights = t.getcol("WEIGHT_SPECTRUM", startrow=chunk_idx * self.chunk_size, nrow=self.chunk_size)
+                            weights = t.getcol("WEIGHT_SPECTRUM", startrow=start, nrow=self.chunk_size)
                             weights = np.nanmean(weights[row_idxs, :, 0], axis=1)[..., np.newaxis]
 
                             # Stacking
                             subd = data[row_idxs, :]
-                            subdata = ne.evaluate("subd * weights")
-                            if self.num_cpus > 8: # method 1
+                            subdata = ne.evaluate("subd * weights") # ne.evaluate due to shape mismatch
+                            if self.num_cpus > 1: # method 1
                                 subdata_new = new_data[row_idxs_new, :]
                                 result = sum_arrays(subdata_new, subdata)
                                 new_data[row_idxs_new, :] = result
                                 subw = uvw_weights[row_idxs_new, :]
-                                result = sum_arrays(subw, weights)
+                                result = ne.evaluate("subw + weights") # ne.evaluate due to shape mismatch
                                 uvw_weights[row_idxs_new, :] = result
                                 del subdata_new
                             else: # method 2
@@ -204,7 +207,7 @@ class Stack:
                         else:
                             # Stacking
                             idx_mask = np.ix_(row_idxs_new, freq_idxs)
-                            if self.num_cpus > 8: # method 1
+                            if self.num_cpus > 1: # method 1
                                 subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
                                 subdata = data[row_idxs, :]
                                 new_data[idx_mask] = sum_arrays(subdata_new, subdata)
@@ -239,9 +242,9 @@ class Stack:
 
                 for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
                     print_progress_bar(chunk_idx, chunks)
-                    start = chunk_idx * self.chunk_size
-                    end = min(start + self.chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
-                    self.T.putcol(col, new_data[start:end], startrow=start, nrow=end - start)
+                    startp = chunk_idx * self.chunk_size
+                    endp = min(start + self.chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
+                    self.T.putcol(col, new_data[start:end], startrow=startp, nrow=endp - startp)
 
                 # clean up
                 del new_data
