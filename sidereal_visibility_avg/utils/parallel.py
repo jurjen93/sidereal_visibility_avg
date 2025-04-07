@@ -1,5 +1,4 @@
 import json
-import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from glob import glob
 from multiprocessing import cpu_count
@@ -7,7 +6,7 @@ from os import path
 import gc
 
 import numpy as np
-from numba import jit, njit, prange, set_num_threads
+from numba import njit, prange, set_num_threads
 
 from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content

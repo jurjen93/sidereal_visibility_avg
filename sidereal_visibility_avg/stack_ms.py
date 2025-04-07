@@ -1,7 +1,6 @@
 from casacore.tables import table, taql
 import numpy as np
-import numexpr as ne
-from os import path, remove
+from os import path
 import sys
 import psutil
 from glob import glob
@@ -15,9 +14,6 @@ from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
 from .utils.parallel import multiply_arrays, sum_arrays, nozeros_nanmean
 
-# Set cores
-if ne.detect_number_of_cores()>1:
-    ne.set_num_threads(min(ne.detect_number_of_cores()-1, 64))
 
 class Stack:
     """
