@@ -16,7 +16,7 @@ from .utils.clean import clean_binary_file
 
 # Set cores
 if ne.detect_number_of_cores()>1:
-    ne.set_num_threads(ne.detect_number_of_cores()-1)
+    ne.set_num_threads(min(ne.detect_number_of_cores()-1, 64))
 
 class Stack:
     """
