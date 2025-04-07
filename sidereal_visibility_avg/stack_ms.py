@@ -13,6 +13,7 @@ from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
+from .utils.parallel import multiply_arrays, sum_arrays, replace_nan
 
 # Set cores
 if ne.detect_number_of_cores()>1:
@@ -183,10 +184,10 @@ class Stack:
                             subdata = ne.evaluate("subd * weights")
                             if self.num_cpus > 8: # method 1
                                 subdata_new = new_data[row_idxs_new, :]
-                                result = ne.evaluate("subdata_new + subdata")
+                                result = sum_arrays(subdata_new, subdata)
                                 new_data[row_idxs_new, :] = result
                                 subw = uvw_weights[row_idxs_new, :]
-                                result = ne.evaluate("subw + weights")
+                                result = sum_arrays(subw, weights)
                                 uvw_weights[row_idxs_new, :] = result
                                 del subdata_new
                             else: # method 2
@@ -206,7 +207,7 @@ class Stack:
                             if self.num_cpus > 8: # method 1
                                 subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
                                 subdata = data[row_idxs, :]
-                                new_data[idx_mask] = ne.evaluate("subdata_new + subdata")
+                                new_data[idx_mask] = sum_arrays(subdata_new, subdata)
                                 del subdata
                                 del subdata_new
                             else: # method 2

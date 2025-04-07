@@ -13,7 +13,7 @@ from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 
 # Ensure some cores free
-cpucount = max(cpu_count() - 1, 1)
+cpucount = min(max(cpu_count() - 1, 1), 64)
 set_num_threads(cpucount)
 
 
