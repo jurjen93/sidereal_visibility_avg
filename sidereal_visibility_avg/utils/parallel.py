@@ -5,7 +5,6 @@ from glob import glob
 from multiprocessing import cpu_count
 from os import path
 import gc
-from time import sleep
 
 import numpy as np
 from numba import jit, njit, prange, set_num_threads
