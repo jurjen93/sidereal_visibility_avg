@@ -13,7 +13,7 @@ from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
-from .utils.parallel import multiply_arrays, sum_arrays, replace_nan
+from .utils.parallel import multiply_arrays, sum_arrays
 
 # Set cores
 if ne.detect_number_of_cores()>1:
@@ -165,8 +165,8 @@ class Stack:
                             data[np.isnan(data)] = 0.
 
                             # Multiply with weight_spectrum for weighted average
-                            weights = t.getcol('WEIGHT_SPECTRUM', startrow=start, nrow=self.chunk_size)[..., 0][..., np.newaxis]
-                            data = ne.evaluate("data * weights") # ne.evaluate due to shape mismatch
+                            weights = t.getcol('WEIGHT_SPECTRUM', startrow=start, nrow=self.chunk_size)
+                            data = multiply_arrays(data, weights)
                             del weights
 
                         # Reduce to one polarisation, since weights have same values for other polarisations
@@ -180,17 +180,16 @@ class Stack:
                         if col == 'UVW':
 
                             weights = t.getcol("WEIGHT_SPECTRUM", startrow=start, nrow=self.chunk_size)
-                            weights = np.nanmean(weights[row_idxs, :, 0], axis=1)[..., np.newaxis]
+                            weights = add_axis(np.nanmean(weights[row_idxs, :, 0], axis=1), 3)
 
                             # Stacking
                             subd = data[row_idxs, :]
-                            subdata = ne.evaluate("subd * weights") # ne.evaluate due to shape mismatch
+                            subdata = multiply_arrays(subd, weights)
                             if self.num_cpus > 1: # method 1
                                 subdata_new = new_data[row_idxs_new, :]
                                 result = sum_arrays(subdata_new, subdata)
                                 new_data[row_idxs_new, :] = result
-                                subw = uvw_weights[row_idxs_new, :]
-                                result = ne.evaluate("subw + weights") # ne.evaluate due to shape mismatch
+                                result = sum_arrays(uvw_weights[row_idxs_new, :], weights)
                                 uvw_weights[row_idxs_new, :] = result
                                 del subdata_new
                             else: # method 2
