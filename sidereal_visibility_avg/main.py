@@ -6,6 +6,8 @@ import sys
 import time
 from argparse import ArgumentParser
 from shutil import rmtree
+from multiprocessing import cpu_count
+from numba import set_num_threads
 
 # Logging
 from .utils.logger import SVALogger
@@ -107,4 +109,10 @@ def main():
 
 
 if __name__ == '__main__':
+
+    # Set number of cores
+    cpucount = min(max(cpu_count() - 1, 1), 64)
+    set_num_threads(cpucount)
+
+    # Run main script
     main()

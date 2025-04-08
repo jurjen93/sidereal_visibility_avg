@@ -6,8 +6,6 @@ import psutil
 from glob import glob
 from scipy.ndimage import gaussian_filter1d
 import gc
-from numba import set_num_threads
-from multiprocessing import cpu_count
 
 from .utils.arrays_and_lists import find_closest_index_list, add_axis
 from .utils.file_handling import load_json, read_mapping
@@ -15,10 +13,6 @@ from .utils.ms_info import make_ant_pairs, get_data_arrays
 from .utils.printing import print_progress_bar
 from .utils.clean import clean_binary_file
 from .utils.parallel import multiply_arrays, sum_arrays
-
-# Ensure some cores free
-cpucount = min(max(cpu_count() - 1, 1), 64)
-set_num_threads(cpucount)
 
 
 class Stack:

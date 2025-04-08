@@ -261,7 +261,7 @@ class Template:
                     time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
 
             # Determine number of workers
-            num_workers = max(cpu_count()-1, 1)
+            num_workers = min(max(cpu_count()-1, 1), 64)
 
             batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
 
@@ -314,7 +314,7 @@ class Template:
 
         # Refine UVW mapping from baseline input to baseline output
         print('\nMake final UVW mapping to output dataset')
-        num_workers = min(cpu_count()-1, len(baselines))
+        num_workers = min(min(cpu_count()-1, len(baselines)), 64)
         msdir = '/'.join(self.mslist[0].split('/')[0:-1])
         process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW)
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
