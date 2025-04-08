@@ -6,7 +6,7 @@ import sys
 import time
 from argparse import ArgumentParser
 from shutil import rmtree
-from multiprocessing import set_start_method, cpu_count
+from multiprocessing import cpu_count
 from numba import set_num_threads
 
 # Logging
