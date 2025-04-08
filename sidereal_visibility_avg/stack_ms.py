@@ -103,13 +103,13 @@ class Stack:
 
                 if col == 'UVW':
                     new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16), 1_000_000_000 // 3)
+                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16), 400_000_000 // 3)
                 elif col=='WEIGHT_SPECTRUM':
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 2_000_000_000 // self.freq_len)
+                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 400_000_000 // self.freq_len)
                 else:
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16 / self.freq_len), 1_000_000_000 // self.freq_len)
+                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16 / self.freq_len), 400_000_000 // self.freq_len)
 
                 print(f"Chunk size ==> {chunk_size}")
 
