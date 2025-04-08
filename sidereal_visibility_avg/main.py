@@ -6,7 +6,8 @@ import sys
 import time
 from argparse import ArgumentParser
 from shutil import rmtree
-from multiprocessing import set_start_method
+from multiprocessing import set_start_method, cpu_count
+from numba import set_num_threads
 
 # Logging
 from .utils.logger import SVALogger
@@ -109,7 +110,8 @@ def main():
 
 if __name__ == '__main__':
 
-    # Spawn method
-    set_start_method('spawn')
+    # Ensure some cores free
+    cpucount = min(max(cpu_count() - 1, 1), 64)
+    set_num_threads(cpucount)
 
     main()

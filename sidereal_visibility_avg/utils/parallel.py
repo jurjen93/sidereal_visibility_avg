@@ -11,10 +11,6 @@ from numba import njit, prange, set_num_threads
 from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 
-# Ensure some cores free
-cpucount = min(max(cpu_count() - 1, 1), 64)
-set_num_threads(cpucount)
-
 
 @njit(parallel=True)
 def replace_nan(arr):
@@ -220,8 +216,8 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
     """
 
     # Determine optimal batch size
+    cpucount = min(max(cpu_count() - 1, 1), 64)
     batch_size = max(len(uniq_ant_pairs) // cpucount, 1)  # Split tasks across all cores
-
     n_jobs = cpucount
 
     try:
