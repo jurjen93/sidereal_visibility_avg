@@ -110,8 +110,9 @@ def main():
 
 if __name__ == '__main__':
 
-    # Ensure some cores free
+    # Set number of cores
     cpucount = min(max(cpu_count() - 1, 1), 64)
     set_num_threads(cpucount)
 
+    # Run main script
     main()
