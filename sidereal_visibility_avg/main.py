@@ -6,6 +6,7 @@ import sys
 import time
 from argparse import ArgumentParser
 from shutil import rmtree
+from multiprocessing import set_start_method
 
 # Logging
 from .utils.logger import SVALogger
@@ -107,4 +108,8 @@ def main():
 
 
 if __name__ == '__main__':
+
+    # Spawn method
+    set_start_method('spawn')
+
     main()
