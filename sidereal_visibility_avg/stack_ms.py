@@ -95,15 +95,19 @@ class Stack:
 
                 gc.collect()
 
+                # Arrays to fill
                 if col == 'UVW':
                     new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16), 1_000_000_000 // 3)
                 elif col=='WEIGHT_SPECTRUM':
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 4_000_000_000 // self.freq_len)
                 else:
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
+
+                # Chunk size
+                if "DATA" in col:
                     chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16 / self.freq_len), 1_000_000_000 // self.freq_len)
+                else:
+                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 4_000_000_000 // self.freq_len)
 
                 print(f"\n---------------\nChunk size ==> {chunk_size}")
 
