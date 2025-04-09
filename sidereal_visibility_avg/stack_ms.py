@@ -5,6 +5,7 @@ import sys
 import psutil
 from glob import glob
 from scipy.ndimage import gaussian_filter1d
+from numba import set_num_threads
 import gc
 
 from .utils.arrays_and_lists import find_closest_index_list, add_axis
@@ -35,7 +36,9 @@ class Stack:
         F.close()
 
         # Memory and chunk size
-        self.num_cpus = psutil.cpu_count(logical=True)
+        # Set number of cores
+        self.num_cpus = min(max(psutil.cpu_count(logical=True) - 1, 1), 64)
+        set_num_threads(self.num_cpus)
         self.total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         self.total_memory /= chunkmem
 
@@ -105,9 +108,9 @@ class Stack:
 
                 # Chunk size
                 if "DATA" in col:
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16 / self.freq_len), 1_000_000_000 // self.freq_len)
+                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16 / self.freq_len), 100_000_000 // self.freq_len)
                 else:
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 4_000_000_000 // self.freq_len)
+                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 400_000_000 // self.freq_len)
 
                 print(f"\n---------------\nChunk size ==> {chunk_size}")
 
