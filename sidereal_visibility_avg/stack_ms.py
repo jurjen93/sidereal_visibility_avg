@@ -41,6 +41,8 @@ class Stack:
         set_num_threads(self.num_cpus)
         self.total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         self.total_memory /= chunkmem
+        self.chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 100_000_000 // self.freq_len)
+        print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
         if self.tmp_folder[-1]!='/':
@@ -106,14 +108,6 @@ class Stack:
                 else:
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
 
-                # Chunk size
-                if "DATA" in col:
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16 / self.freq_len), 400_000_000 // self.freq_len)
-                else:
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 100_000_000 // self.freq_len)
-
-                print(f"\n---------------\nChunk size ==> {chunk_size}")
-
                 # Loop over measurement sets
                 for ms in self.mslist:
 
@@ -150,19 +144,19 @@ class Stack:
                         sys.exit('ERROR: cannot find *_baseline_mapping folders')
 
                     # Chunked stacking!
-                    chunks = len(indices)//chunk_size + 1
+                    chunks = len(indices)//self.chunk_size + 1
                     print(f'Stacking in {chunks} chunks')
                     for chunk_idx in range(chunks):
                         print_progress_bar(chunk_idx, chunks+1)
 
-                        start = chunk_idx * chunk_size
-                        end = start + chunk_size
+                        start = chunk_idx * self.chunk_size
+                        end = start + self.chunk_size
 
                         # Get indices
                         row_idxs_new = ref_indices[start:end]
                         row_idxs = np.array([int(i - start) for i in indices[start:end]])
 
-                        data = t.getcol(col, startrow=start, nrow=chunk_size)
+                        data = t.getcol(col, startrow=start, nrow=self.chunk_size)
 
                         # Take complex conjugate for inverted baselines
                         if comp_conj is not None:
@@ -175,7 +169,7 @@ class Stack:
                             data[np.isnan(data)] = 0.
 
                             # Multiply with weight_spectrum for weighted average
-                            weights = t.getcol('WEIGHT_SPECTRUM', startrow=start, nrow=chunk_size)
+                            weights = t.getcol('WEIGHT_SPECTRUM', startrow=start, nrow=self.chunk_size)
                             data = multiply_arrays(data, weights)
                             del weights
 
@@ -185,7 +179,7 @@ class Stack:
 
                         if col == 'UVW':
 
-                            weights = t.getcol("WEIGHT_SPECTRUM", startrow=start, nrow=chunk_size)[..., 0]
+                            weights = t.getcol("WEIGHT_SPECTRUM", startrow=start, nrow=self.chunk_size)[..., 0]
                             weights = add_axis(np.nanmean(weights[row_idxs, :], axis=1), 3)
 
                             # Stacking
@@ -245,10 +239,10 @@ class Stack:
                 elif col == 'DATA':
                     new_data[new_data==0] = np.nan
 
-                for chunk_idx in range(self.T.nrows() // chunk_size + 1):
+                for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
                     print_progress_bar(chunk_idx, chunks)
-                    startp = chunk_idx * chunk_size
-                    endp = min(startp + chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
+                    startp = chunk_idx * self.chunk_size
+                    endp = min(startp + self.chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
                     self.T.putcol(col, new_data[startp:endp], startrow=startp, nrow=endp - startp)
 
                 # clean up
