@@ -108,9 +108,9 @@ class Stack:
 
                 # Chunk size
                 if "DATA" in col:
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16 / self.freq_len), 100_000_000 // self.freq_len)
+                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 16 / self.freq_len), 400_000_000 // self.freq_len)
                 else:
-                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 400_000_000 // self.freq_len)
+                    chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 100_000_000 // self.freq_len)
 
                 print(f"\n---------------\nChunk size ==> {chunk_size}")
 
