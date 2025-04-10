@@ -35,7 +35,7 @@ def parse_args():
     parser.add_argument('--fov_diam', type=float, help='Desired field of view diameter in degrees. This is used to calculate the optimal time resolution.')
     parser.add_argument('--dysco', action='store_true', help='Dysco compression of data.')
     parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM storage (slower but less RAM cost).')
-    parser.add_argument('--chunk_factor', type=int, help='Factor to reduce chunk size if RAM issues')
+    parser.add_argument('--chunk_factor', type=float, help='Factor to reduce chunk size if RAM issues', default=1.)
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template.')
     parser.add_argument('--dp3_uvw', action='store_true', help='Use DP3 to recalculate UVW values, instead of interpolation (interpolation is probably more precise).')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')

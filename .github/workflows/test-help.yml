@@ -28,3 +28,6 @@ jobs:
 
       - name: Run testcase
         run: python -m sidereal_visibility_avg.main .github/testdata/test?.ms
+
+      - name: Run testcase with chunk factor
+        run: python -m sidereal_visibility_avg.main --chunk_factor 2345.1 .github/testdata/test?.ms
