@@ -41,7 +41,7 @@ class Stack:
         set_num_threads(self.num_cpus)
         self.total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         self.total_memory /= chunkmem
-        self.chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 4 / self.freq_len), 100_000_000 // self.freq_len)
+        self.chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 8 / self.freq_len), 30_000_000 // self.freq_len)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
@@ -98,8 +98,6 @@ class Stack:
             # Loop over columns
             for col in columns:
 
-                gc.collect()
-
                 # Arrays to fill
                 if col == 'UVW':
                     new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
@@ -110,6 +108,8 @@ class Stack:
 
                 # Loop over measurement sets
                 for ms in self.mslist:
+
+                    gc.collect()
 
                     print(f'\n{col} :: {ms}')
 
@@ -239,10 +239,12 @@ class Stack:
                 elif col == 'DATA':
                     new_data[new_data==0] = np.nan
 
-                for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
-                    print_progress_bar(chunk_idx, chunks)
-                    startp = chunk_idx * self.chunk_size
-                    endp = min(startp + self.chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
+                chunk_size = int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize // 8 // self.freq_len)
+                chunks = range(self.T.nrows() // chunk_size + 1)
+                for chunk_idx in chunks:
+                    print_progress_bar(chunk_idx, len(chunks))
+                    startp = chunk_idx * chunk_size
+                    endp = min(startp + chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
                     self.T.putcol(col, new_data[startp:endp], startrow=startp, nrow=endp - startp)
 
                 # clean up
