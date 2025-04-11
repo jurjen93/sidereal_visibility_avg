@@ -245,7 +245,8 @@ class Stack:
                     print_progress_bar(chunk_idx, len(chunks))
                     startp = chunk_idx * chunk_size
                     endp = min(startp + chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
-                    self.T.putcol(col, new_data[startp:endp], startrow=startp, nrow=endp - startp)
+                    dat = np.array(new_data[startp:endp])
+                    self.T.putcol(col, dat, startrow=startp, nrow=endp - startp)
 
                 # clean up
                 del new_data
