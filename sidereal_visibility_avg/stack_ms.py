@@ -239,12 +239,11 @@ class Stack:
                 elif col == 'DATA':
                     new_data[new_data==0] = np.nan
 
-                chunk_size = int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize // 8 // self.freq_len)
-                chunks = range(self.T.nrows() // chunk_size + 1)
+                chunks = range(self.T.nrows() // self.chunk_size + 1)
                 for chunk_idx in chunks:
                     print_progress_bar(chunk_idx, len(chunks))
-                    startp = chunk_idx * chunk_size
-                    endp = min(startp + chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
+                    startp = chunk_idx * self.chunk_size
+                    endp = min(startp + self.chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
                     self.T.putcol(col, new_data[startp:endp], startrow=startp, nrow=endp - startp)
 
                 # clean up
