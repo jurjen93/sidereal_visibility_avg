@@ -5,7 +5,6 @@ import sys
 import psutil
 from glob import glob
 from scipy.ndimage import gaussian_filter1d
-from numba import set_num_threads
 import gc
 
 from .utils.arrays_and_lists import find_closest_index_list, add_axis
@@ -37,8 +36,6 @@ class Stack:
 
         # Memory and chunk size
         # Set number of cores
-        self.num_cpus = min(max(psutil.cpu_count(logical=True) - 1, 1), 64)
-        set_num_threads(self.num_cpus)
         self.total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
         self.total_memory /= chunkmem
         self.chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 8 / self.freq_len), 30_000_000 // self.freq_len)
@@ -185,16 +182,12 @@ class Stack:
                             # Stacking
                             subd = data[row_idxs, :]
                             subdata = multiply_arrays(subd, weights)
-                            if self.num_cpus > 1: # method 1
-                                subdata_new = new_data[row_idxs_new, :]
-                                result = sum_arrays(subdata_new, subdata)
-                                new_data[row_idxs_new, :] = result
-                                result = sum_arrays(uvw_weights[row_idxs_new, :], weights)
-                                uvw_weights[row_idxs_new, :] = result
-                                del subdata_new
-                            else: # method 2
-                                np.add.at(new_data, row_idxs_new, subdata)
-                                np.add.at(uvw_weights, row_idxs_new, weights)
+                            subdata_new = new_data[row_idxs_new, :]
+                            result = sum_arrays(subdata_new, subdata)
+                            new_data[row_idxs_new, :] = result
+                            result = sum_arrays(uvw_weights[row_idxs_new, :], weights)
+                            uvw_weights[row_idxs_new, :] = result
+                            del subdata_new
                             del subdata
                             del weights
 
@@ -206,18 +199,14 @@ class Stack:
                         else:
                             # Stacking
                             idx_mask = np.ix_(row_idxs_new, freq_idxs)
-                            if self.num_cpus > 1: # method 1
-                                subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
-                                subdata = data[row_idxs, :]
-                                new_data[idx_mask] = sum_arrays(subdata_new, subdata)
-                                del subdata
-                                del subdata_new
-                            else: # method 2
-                                np.add.at(new_data, idx_mask, data[row_idxs, :])
+                            subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
+                            subdata = data[row_idxs, :]
+                            new_data[idx_mask] = sum_arrays(subdata_new, subdata)
+                            del subdata
+                            del subdata_new
 
                         # Cleanup
                         del data
-                        gc.collect()
 
                     try:
                         new_data.flush()

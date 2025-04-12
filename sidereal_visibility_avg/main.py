@@ -41,6 +41,7 @@ def parse_args():
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')
     parser.add_argument('--skip_uvw_mapping', action='store_true', help='Do not adjust UVW mapping (needs --keep_mapping from earlier run).')
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
+    parser.add_argument('--ncpu', type=int, help='Maximum number of cpus (default is maximum available)', default=None)
 
     return parser.parse_args()
 
@@ -53,6 +54,13 @@ def main():
     # Make template
     args = parse_args()
     print(args)
+
+    # Set number of cores
+    if args.ncpu is None:
+        cpucount = min(max(cpu_count() - 1, 1), 64)
+    else:
+        cpucount = args.ncpu
+    set_num_threads(cpucount)
 
     if len(args.msin)<2:
         sys.exit(f"ERROR: Need more than 1 ms, currently given: {' '.join(args.msin)}")
@@ -80,7 +88,7 @@ def main():
         print(f"Additional time sampling factor {avg}\n")
 
     # Make template
-    t = Template(args.msin, args.msout, tmp_folder=args.tmp)
+    t = Template(args.msin, args.msout, tmp_folder=args.tmp, ncpu=cpucount)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg)
     if args.skip_uvw_mapping:
         print('--skip_uvw_mapping requested --> use already existing mapping files')
@@ -110,10 +118,5 @@ def main():
 
 
 if __name__ == '__main__':
-
-    # Set number of cores
-    cpucount = min(max(cpu_count() - 1, 1), 64)
-    set_num_threads(cpucount)
-
     # Run main script
     main()

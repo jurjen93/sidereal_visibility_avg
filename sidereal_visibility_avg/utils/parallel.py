@@ -1,7 +1,6 @@
 import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from glob import glob
-from multiprocessing import cpu_count
 from os import path
 import gc
 
@@ -209,14 +208,13 @@ def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
     return mapping_batch
 
 
-def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder):
+def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder, cpucount):
     """
     Parallel processing of mapping with unique antenna pairs using ProcessPoolExecutor.
     Writes the mappings directly after each batch is processed.
     """
 
     # Determine optimal batch size
-    cpucount = min(max(cpu_count() - 1, 1), 64)
     batch_size = max(len(uniq_ant_pairs) // cpucount, 1)  # Split tasks across all cores
     n_jobs = cpucount
 

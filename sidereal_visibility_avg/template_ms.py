@@ -25,9 +25,10 @@ class Template:
         - msin: List of input MS
         - outname: Output name for MS
         - tmp_folder: Directory to store temporary files (mapping, .dat files etc.), such as a local scratch or RAM disk
+        - ncpu: Number of cpus
     """
 
-    def __init__(self, msin: list = None, outname: str = 'sva_output.ms', tmp_folder: str = '.'):
+    def __init__(self, msin: list = None, outname: str = 'sva_output.ms', tmp_folder: str = '.', ncpu: int = None):
         if type(msin)!=list:
             sys.exit("ERROR: input needs to be a list of MS.")
         self.mslist = msin
@@ -38,6 +39,11 @@ class Template:
         self.tmp_folder = tmp_folder
         if self.tmp_folder[-1]!='/':
             self.tmp_folder+='/'
+
+        if ncpu is None:
+            self.ncpu = min(cpu_count()-1, 1)
+        else:
+            self.ncpu = ncpu
 
     @property
     def time_lst_offset(self):
@@ -214,7 +220,7 @@ class Template:
                     antennas = np.sort(antennas, axis=1)
 
                     # Run parallel mapping
-                    run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder)
+                    run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder, self.ncpu)
                 else:
                     print(f'{mapping_folder} already exists')
 
@@ -260,12 +266,9 @@ class Template:
                     uvw[:] = f.getcol("UVW")
                     time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
 
-            # Determine number of workers
-            num_workers = min(max(cpu_count()-1, 1), 64)
+            batch_size = max(1, len(baselines) // self.ncpu)  # Ensure at least one baseline per batch
 
-            batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
-
-            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            with ProcessPoolExecutor(max_workers=self.ncpu) as executor:
                 future_to_baseline = {
                     executor.submit(process_baseline_int, range(i, min(i + batch_size, len(baselines))), baselines,
                                     self.mslist): i
@@ -314,10 +317,9 @@ class Template:
 
         # Refine UVW mapping from baseline input to baseline output
         print('\nMake final UVW mapping to output dataset')
-        num_workers = min(min(cpu_count()-1, len(baselines)), 64)
         msdir = '/'.join(self.mslist[0].split('/')[0:-1])
         process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW)
-        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        with ProcessPoolExecutor(max_workers=self.ncpu) as executor:
             future_to_baseline = {executor.submit(process_func, baseline): baseline for baseline in baselines}
 
             for n, future in enumerate(as_completed(future_to_baseline)):
