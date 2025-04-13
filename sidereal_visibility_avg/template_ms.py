@@ -1,6 +1,6 @@
 from casacore.tables import table, default_ms, taql
 import numpy as np
-from os import path, makedirs, cpu_count
+from os import path, makedirs, cpu_count, environ
 from os import system as run_command
 import sys
 from shutil import rmtree
@@ -41,7 +41,7 @@ class Template:
             self.tmp_folder+='/'
 
         if ncpu is None:
-            self.ncpu = min(cpu_count()-1, 1)
+            self.ncpu = environ.get("SLURM_CPUS_ON_NODE", min(max(cpu_count() - 1, 1), 64))
         else:
             self.ncpu = ncpu
 

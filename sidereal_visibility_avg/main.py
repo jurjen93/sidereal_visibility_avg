@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 from shutil import rmtree
 from multiprocessing import cpu_count
 from numba import set_num_threads
+from os import environ
 
 # Logging
 from .utils.logger import SVALogger
@@ -57,7 +58,7 @@ def main():
 
     # Set number of cores
     if args.ncpu is None:
-        cpucount = min(max(cpu_count() - 1, 1), 64)
+        cpucount = environ.get("SLURM_CPUS_ON_NODE", min(max(cpu_count() - 1, 1), 64))
     else:
         cpucount = args.ncpu
     set_num_threads(cpucount)
