@@ -58,7 +58,7 @@ def main():
 
     # Set number of cores
     if args.ncpu is None:
-        cpucount = environ.get("SLURM_CPUS_ON_NODE", min(max(cpu_count() - 1, 1), 64))
+        cpucount = int(environ.get("SLURM_CPUS_ON_NODE", min(max(cpu_count() - 1, 1), 64)))
     else:
         cpucount = args.ncpu
     set_num_threads(cpucount)

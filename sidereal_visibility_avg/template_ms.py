@@ -41,7 +41,7 @@ class Template:
             self.tmp_folder+='/'
 
         if ncpu is None:
-            self.ncpu = environ.get("SLURM_CPUS_ON_NODE", min(max(cpu_count() - 1, 1), 64))
+            self.ncpu = int(environ.get("SLURM_CPUS_ON_NODE", min(max(cpu_count() - 1, 1), 64)))
         else:
             self.ncpu = ncpu
 
