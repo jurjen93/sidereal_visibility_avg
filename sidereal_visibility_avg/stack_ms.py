@@ -192,8 +192,7 @@ class Stack:
 
                         else:
                             # Stacking
-                            new_data[row_idxs_new[:, None], freq_idxs] += data[row_idxs, :, None]
-                            # new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(new_data[row_idxs_new[:, None], freq_idxs], data[row_idxs, :])
+                            new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(new_data[row_idxs_new[:, None], freq_idxs], data[row_idxs, :])
 
                     try:
                         new_data.flush()
