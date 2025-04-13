@@ -218,11 +218,11 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
         if always_memmap:
             print(f'\n--safe_memory requested, because concerned about RAM? --> Use memmap for {column}')
         else:
-            print(f"\n{column}_size ({data_size}) > Available Memory ({available_memory//4}) --> Use memmap")
+            print(f"\n{column}_size ({data_size}) > Available Memory ({available_memory//2}) --> Use memmap")
         new_data = np.memmap(tmpfilename, dtype=dtp, mode='w+', shape=shape)
     else:
         gc.collect()
-        print(f"\n{column}_size ({data_size}) < Available Memory ({available_memory//4}) --> Load data in RAM")
+        print(f"\n{column}_size ({data_size}) < Available Memory ({available_memory//2}) --> Load data in RAM")
         new_data = np.zeros(shape, dtype=dtp)
 
     return new_data, weights

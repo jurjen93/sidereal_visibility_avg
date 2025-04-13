@@ -36,35 +36,12 @@ def multiply_flat_arrays_numba(A_flat, B_flat, out_flat):
 def multiply_arrays(A, B):
     """
     Multiplies two NumPy arrays of the same shape elementwise.
-    Uses Numba with parallel=True on flattened data for high efficiency.
-
-    Parameters
-    ----------
-    A, B : np.ndarray
-        Arrays of the same shape and compatible dtypes.
-
-    Returns
-    -------
-    out : np.ndarray
-        The elementwise product of A and B.
     """
 
-    # Ensure A and B have the same shape
     assert A.shape == B.shape, "Arrays must have the same shape"
 
-    # Allocate an output array (same shape and dtype as A)
     out = np.empty_like(A)
-
-    # Get flattened (ravel) views of A, B, and out
-    if isinstance(A, np.memmap):
-        A_flat = np.array(A).ravel()
-    else:
-        A_flat = A.ravel()
-    B_flat = B.ravel()
-    out_flat = out.ravel()
-
-    # Call the parallel Numba kernel on the flattened data
-    multiply_flat_arrays_numba(A_flat, B_flat, out_flat)
+    multiply_flat_arrays_numba(A.ravel(), B.ravel(), out.ravel())
 
     return out
 
@@ -89,21 +66,12 @@ def sum_flat_arrays_numba(A_flat, B_flat, out_flat):
 def sum_arrays(A, B):
     """
     Sums two NumPy arrays elementwise.
-    Supports broadcasting when needed.
-    Uses Numba with parallel=True on flattened data.
     """
+
     assert A.shape == B.shape, "Arrays must have the same shape"
 
-    # Allocate output array (same shape, dtype as A)
     out = np.empty_like(A)
-
-    # Flatten views only (no copies)
-    A_flat = A.ravel()
-    B_flat = B.ravel()
-    out_flat = out.ravel()
-
-    # Call the Numba kernel
-    sum_flat_arrays_numba(A_flat, B_flat, out_flat)
+    sum_flat_arrays_numba(A.ravel(), B.ravel(), out.ravel())
 
     return out
 
