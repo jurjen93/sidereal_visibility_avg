@@ -5,10 +5,16 @@ from os import path
 import gc
 
 import numpy as np
-from numba import njit, prange
+from numba import njit, prange, get_num_threads
 
 from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
+
+# Settings
+n_threads = get_num_threads()
+target_chunks_per_thread = 8
+min_chunk = 1024
+max_chunk = 65536
 
 
 @njit(parallel=True)
@@ -65,12 +71,19 @@ def multiply_arrays(A, B):
 
 @njit(parallel=True)
 def sum_flat_arrays_numba(A_flat, B_flat, out_flat):
-    """
-    Numba kernel that sums two flattened arrays into a flattened output.
-    A_flat, B_flat, out_flat must all be 1D and of the same size.
-    """
-    for i in prange(A_flat.size):
-        out_flat[i] = A_flat[i] + B_flat[i]
+    n = A_flat.size
+
+    chunk_size = max(min_chunk, min(max_chunk, (n + n_threads * target_chunks_per_thread - 1) // (n_threads * target_chunks_per_thread)))
+
+    # Parallel over chunks
+    n_chunks = (n + chunk_size - 1) // chunk_size
+
+    for chunk_id in prange(n_chunks):
+        chunk_start = chunk_id * chunk_size
+        chunk_end = min(chunk_start + chunk_size, n)
+
+        for i in range(chunk_start, chunk_end):
+            out_flat[i] = A_flat[i] + B_flat[i]
 
 
 def sum_arrays(A, B):
@@ -79,21 +92,17 @@ def sum_arrays(A, B):
     Supports broadcasting when needed.
     Uses Numba with parallel=True on flattened data.
     """
-    # Make sure they have the same shape
     assert A.shape == B.shape, "Arrays must have the same shape"
 
     # Allocate output array (same shape, dtype as A)
     out = np.empty_like(A)
 
-    # Flatten (ravel) the arrays to 1D
-    if isinstance(A, np.memmap):
-        A_flat = np.array(A).ravel()
-    else:
-        A_flat = A.ravel()
+    # Flatten views only (no copies)
+    A_flat = A.ravel()
     B_flat = B.ravel()
     out_flat = out.ravel()
 
-    # Call the parallel Numba kernel on the flattened data
+    # Call the Numba kernel
     sum_flat_arrays_numba(A_flat, B_flat, out_flat)
 
     return out
