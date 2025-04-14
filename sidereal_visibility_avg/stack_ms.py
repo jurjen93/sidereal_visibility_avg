@@ -180,10 +180,13 @@ class Stack:
                             weights = add_axis(np.nanmean(weights[row_idxs, :], axis=1), 3)
 
                             # Stacking
-                            new_data[row_idxs_new, :]= sum_arrays(new_data[row_idxs_new, :], multiply_arrays(data[row_idxs, :], weights))
+                            subdata = multiply_arrays(data[row_idxs, :], weights)
+                            new_data[row_idxs_new, :]= sum_arrays(new_data[row_idxs_new, :], subdata)
                             uvw_weights[row_idxs_new, :] = sum_arrays(uvw_weights[row_idxs_new, :], weights)
 
-                            del weights
+                            # cleanup
+                            subdata = None
+                            weights = None
 
                             try:
                                 uvw_weights.flush()
@@ -193,6 +196,10 @@ class Stack:
                         else:
                             # Stacking
                             new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(new_data[row_idxs_new[:, None], freq_idxs], data[row_idxs, :])
+
+                        # cleanup
+                        data = None
+                        gc.collect()
 
                     try:
                         new_data.flush()
