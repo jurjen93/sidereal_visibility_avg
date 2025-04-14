@@ -76,6 +76,24 @@ def sum_arrays(A, B):
     return out
 
 
+@njit(parallel=True)
+def inplace_sum_time(A, row_idxs_new, B):
+    n_cols = B.size
+    for i in prange(row_idxs_new.size):
+        row_new = row_idxs_new[i]
+        for j in range(n_cols):
+            A[row_new, j] += B[j]
+
+
+@njit(parallel=True)
+def inplace_sum_timefreq(A, row_idxs_new, freq_idxs, B, row_idxs):
+    for i in prange(row_idxs_new.size):
+        row_new = row_idxs_new[i]
+        row_old = row_idxs[i]
+        for j in range(freq_idxs.size):
+            A[row_new, freq_idxs[j]] += B[row_old, j]
+
+
 @njit
 def nanmean_excluding_zeros_flat(a):
     """
