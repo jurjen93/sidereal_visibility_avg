@@ -24,7 +24,7 @@ def replace_nan(arr):
     return arr
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def multiply_flat_arrays_numba(A_flat, B_flat, out_flat):
     """
     Numba kernel that multiplies two flattened arrays into a flattened output.
@@ -46,7 +46,7 @@ def multiply_arrays(A, B):
     return out
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def sum_flat_arrays_numba(A_flat, B_flat, out_flat):
     n = A_flat.size
 
