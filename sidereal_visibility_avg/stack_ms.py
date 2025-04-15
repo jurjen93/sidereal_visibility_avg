@@ -7,7 +7,7 @@ from glob import glob
 from scipy.ndimage import gaussian_filter1d
 import gc
 
-from .utils.arrays_and_lists import find_closest_index_list, add_axis
+from .utils.arrays_and_lists import find_closest_index_list, add_axis, is_range
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
 from .utils.printing import print_progress_bar
@@ -153,9 +153,18 @@ class Stack:
 
                         data = t.getcol(col, startrow=start, nrow=self.chunk_size)
 
+                        # Check if the row_idxs is a proper range
+                        if not is_range(row_idxs):
+                            data = data[row_idxs, :]
+                            norange = True
+                        else:
+                            norange = False
+
                         # Take complex conjugate for inverted baselines
                         if comp_conj is not None:
                             comp_conj_mask = comp_conj[start:end]
+                            if norange:
+                                comp_conj_mask = comp_conj_mask[row_idxs]
                             if np.any(comp_conj_mask):
                                 np.conjugate(data[comp_conj_mask], out=data[comp_conj_mask])
 
@@ -165,6 +174,8 @@ class Stack:
 
                             # Multiply with weight_spectrum for weighted average
                             weights = t.getcol('WEIGHT_SPECTRUM', startrow=start, nrow=self.chunk_size)
+                            if norange:
+                                weights = weights[row_idxs, :]
                             data = multiply_arrays(data, weights)
                             del weights
 
@@ -175,11 +186,13 @@ class Stack:
                         if col == 'UVW':
 
                             weights = t.getcol("WEIGHT_SPECTRUM", startrow=start, nrow=self.chunk_size)[..., 0]
-                            weights = add_axis(np.nanmean(weights[row_idxs, :], axis=1), 3)
+                            if norange:
+                                weights = weights[row_idxs, :]
+                            weights = add_axis(np.nanmean(weights, axis=1), 3)
 
                             # Stacking
                             uvw_weights[row_idxs_new, :] = sum_arrays(uvw_weights[row_idxs_new, :], weights)
-                            subdata = multiply_arrays(data[row_idxs, :], weights)
+                            subdata = multiply_arrays(data, weights)
                             if isinstance(new_data, np.memmap):
                                 buffer = new_data[row_idxs_new, :].copy()
                                 new_data[row_idxs_new, :] = sum_arrays(buffer, subdata)
@@ -199,10 +212,10 @@ class Stack:
                             # Stacking
                             if isinstance(new_data, np.memmap):
                                 buffer = new_data[row_idxs_new[:, None], freq_idxs].copy()
-                                new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(buffer, data[row_idxs, :])
+                                new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(buffer, data)
                             else:
                                 new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(new_data[row_idxs_new[:, None],
-                                                                                        freq_idxs], data[row_idxs, :])
+                                                                                        freq_idxs], data)
 
                         # cleanup
                         data = None

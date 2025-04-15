@@ -244,3 +244,19 @@ def squeeze_to_intlist(arr):
         return squeezed.tolist()
     else:
         return squeezed.tolist()
+
+
+def is_range(arr):
+    """
+    Check if list/array is range
+
+    Args:
+        arr: array
+
+    Returns: boolean
+    """
+    return (
+        np.issubdtype(arr.dtype, np.integer) and
+        arr.ndim == 1 and
+        np.all(np.diff(arr) == 1)
+    )
