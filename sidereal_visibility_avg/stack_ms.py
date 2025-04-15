@@ -106,8 +106,6 @@ class Stack:
                 # Loop over measurement sets
                 for ms in self.mslist:
 
-                    gc.collect()
-
                     print(f'\n{col} :: {ms}')
 
                     # Open MS table to stack on output data
@@ -180,9 +178,13 @@ class Stack:
                             weights = add_axis(np.nanmean(weights[row_idxs, :], axis=1), 3)
 
                             # Stacking
-                            subdata = multiply_arrays(data[row_idxs, :], weights)
-                            new_data[row_idxs_new, :]= sum_arrays(new_data[row_idxs_new, :], subdata)
                             uvw_weights[row_idxs_new, :] = sum_arrays(uvw_weights[row_idxs_new, :], weights)
+                            subdata = multiply_arrays(data[row_idxs, :], weights)
+                            if isinstance(new_data, np.memmap):
+                                buffer = new_data[row_idxs_new, :].copy()
+                                new_data[row_idxs_new, :] = sum_arrays(buffer, subdata)
+                            else:
+                                new_data[row_idxs_new, :] = sum_arrays(new_data[row_idxs_new, :], subdata)
 
                             # cleanup
                             subdata = None
@@ -195,13 +197,19 @@ class Stack:
 
                         else:
                             # Stacking
-                            new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(new_data[row_idxs_new[:, None], freq_idxs], data[row_idxs, :])
+                            if isinstance(new_data, np.memmap):
+                                buffer = new_data[row_idxs_new[:, None], freq_idxs].copy()
+                                new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(buffer, data[row_idxs, :])
+                            else:
+                                new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(new_data[row_idxs_new[:, None],
+                                                                                        freq_idxs], data[row_idxs, :])
 
                         # cleanup
                         data = None
-                        gc.collect()
+                        buffer = None
 
                     try:
+                        gc.collect()
                         new_data.flush()
                     except AttributeError:
                         pass
@@ -215,18 +223,21 @@ class Stack:
                     new_data /= uvw_weights
                     new_data[new_data != new_data] = 0.
 
-                elif col == 'WEIGHT_SPECTRUM':
-                    new_data = add_axis(new_data, 4)
-
-                elif col == 'DATA':
-                    new_data[new_data==0] = np.nan
-
                 chunks = range(self.T.nrows() // self.chunk_size + 1)
                 for chunk_idx in chunks:
                     print_progress_bar(chunk_idx, len(chunks))
                     startp = chunk_idx * self.chunk_size
-                    endp = min(startp + self.chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
-                    self.T.putcol(col, new_data[startp:endp], startrow=startp, nrow=endp - startp)
+                    endp = min(startp + self.chunk_size, self.T.nrows())
+
+                    # Get chunk
+                    subdat = new_data[startp:endp]
+
+                    if col == 'WEIGHT_SPECTRUM':
+                        subdat = add_axis(subdat, 4)
+                    elif col == 'DATA':
+                        subdat[subdat == 0] = np.nan
+
+                    self.T.putcol(col, subdat, startrow=startp, nrow=endp - startp)
 
                 # clean up
                 del new_data

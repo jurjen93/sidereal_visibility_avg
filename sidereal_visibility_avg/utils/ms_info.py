@@ -198,12 +198,10 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
         weights = None
 
     if column == 'DATA':
-        dtp = np.complex64
-        shape = (nrows, freq_len, 4)
+        shape, dtp = (nrows, freq_len, 4), np.complex64
 
     elif column == 'WEIGHT_SPECTRUM' or column=='WEIGHT':
-        dtp = np.float32
-        shape = (nrows, freq_len)
+        shape, dtp = (nrows, freq_len), np.float32
 
     elif column == 'UVW':
         shape, dtp = (nrows, 3), np.float32
@@ -221,7 +219,6 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
             print(f"\n{column}_size ({data_size}) > Available Memory ({available_memory//2}) --> Use memmap")
         new_data = np.memmap(tmpfilename, dtype=dtp, mode='w+', shape=shape)
     else:
-        gc.collect()
         print(f"\n{column}_size ({data_size}) < Available Memory ({available_memory//2}) --> Load data in RAM")
         new_data = np.zeros(shape, dtype=dtp)
 
