@@ -260,8 +260,8 @@ class Template:
 
             for ms_idx, ms in enumerate(sorted(self.mslist)):
                 with table(ms, ack=False) as f:
-                    uvw = np.memmap(self.tmp_folder+f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
-                    time = np.memmap(self.tmp_folder+f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
+                    uvw = np.memmap(self.tmp_folder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                    time = np.memmap(self.tmp_folder+f'{path.basename(ms)}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
 
                     uvw[:] = f.getcol("UVW")
                     time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
@@ -271,7 +271,7 @@ class Template:
             with ProcessPoolExecutor(max_workers=self.ncpu) as executor:
                 future_to_baseline = {
                     executor.submit(process_baseline_int, range(i, min(i + batch_size, len(baselines))), baselines,
-                                    self.mslist): i
+                                    self.mslist, self.tmp_folder): i
                     for i in range(0, len(baselines), batch_size)
                 }
 
@@ -309,7 +309,7 @@ class Template:
 
                 for ms_idx, ms in enumerate(sorted(self.mslist)):
                     with table(ms, ack=False) as f:
-                        uvw = np.memmap(f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                        uvw = np.memmap(self.tmp_folder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
                         uvw[:] = f.getcol("UVW")
 
         else:
@@ -318,7 +318,7 @@ class Template:
         # Refine UVW mapping from baseline input to baseline output
         print('\nMake final UVW mapping to output dataset')
         msdir = '/'.join(self.mslist[0].split('/')[0:-1])
-        process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW)
+        process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW, tmpfolder=self.tmp_folder)
         with ProcessPoolExecutor(max_workers=self.ncpu) as executor:
             future_to_baseline = {executor.submit(process_func, baseline): baseline for baseline in baselines}
 

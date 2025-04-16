@@ -252,7 +252,7 @@ def process_ms(ms):
     return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
 
 
-def process_baseline_uvw(baseline, folder, UVW):
+def process_baseline_uvw(baseline, folder, UVW, tmpfolder):
     """Parallel processing of one baseline"""
 
     try:
@@ -280,7 +280,7 @@ def process_baseline_uvw(baseline, folder, UVW):
             idxs = np.fromiter((int(i) for i in mapping.keys()), dtype=int)
             ms_dir = '/'.join(pathf.split('/')[:-1]).replace("_baseline_mapping", "")
             ms = glob(ms_dir)[0]
-            uvw_in = np.memmap(f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
+            uvw_in = np.memmap(tmpfolder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
             idxs_new = np.array(idxs_ref)[find_closest_index_multi_array(uvw_in[:, :2], uvw_ref[:, :2])]
             new_mapping = dict(zip(map(str, idxs), idxs_new.astype(int).tolist()))
             with open(pathf, 'w') as f:
@@ -290,7 +290,7 @@ def process_baseline_uvw(baseline, folder, UVW):
         print(f'Baseline {baseline} generated an exception: {exc}')
 
 
-def process_baseline_int(baseline_indices, baselines, mslist):
+def process_baseline_int(baseline_indices, baselines, mslist, tmpfolder):
     """Process baselines parallel executor"""
 
     results = []
@@ -309,10 +309,10 @@ def process_baseline_int(baseline_indices, baselines, mslist):
                 continue
 
             row_idxs += list(mapjson.values())
-            uvw = np.append(np.memmap(f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
+            uvw = np.append(np.memmap(tmpfolder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
                 [int(i) for i in list(mapjson.keys())]], uvw, axis=0)
 
-            time = np.append(np.memmap(f'{path.basename(ms)}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
+            time = np.append(np.memmap(tmpfolder+f'{path.basename(ms)}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
 
         results.append((list(np.unique(np.abs(row_idxs))), uvw, baseline, time))
     return results
