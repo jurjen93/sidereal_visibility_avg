@@ -121,7 +121,7 @@ class Stack:
                     print('Collect relevant frequencies')
 
                     # Make antenna mapping in parallel
-                    mapping_folder = self.tmp_folder + ms + '_baseline_mapping'
+                    mapping_folder = self.tmp_folder + path.basename(ms) + '_baseline_mapping'
 
                     print('Read baseline mapping')
                     indices, ref_indices = read_mapping(mapping_folder)

@@ -266,24 +266,24 @@ def process_baseline_uvw(baseline, folder, UVW):
         # Load all mappings and collect idxs_ref
         idxs_ref = set()
         mappings = []
-        for path in mapping_files:
-            with open(path) as f:
+        for pathf in mapping_files:
+            with open(pathf) as f:
                 mapping = json.load(f)
-                mappings.append((path, mapping))
+                mappings.append((pathf, mapping))
                 idxs_ref.update(mapping.values())
 
         idxs_ref = np.unique(np.fromiter(idxs_ref, dtype=int))
         uvw_ref = UVW[np.abs(idxs_ref)]
 
         # Loop over mapping files with nearest neighbouring
-        for path, mapping in mappings:
+        for pathf, mapping in mappings:
             idxs = np.fromiter((int(i) for i in mapping.keys()), dtype=int)
-            ms_dir = '/'.join(path.split('/')[:-1]).replace("_baseline_mapping", "")
+            ms_dir = '/'.join(pathf.split('/')[:-1]).replace("_baseline_mapping", "")
             ms = glob(ms_dir)[0]
-            uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
+            uvw_in = np.memmap(f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
             idxs_new = np.array(idxs_ref)[find_closest_index_multi_array(uvw_in[:, :2], uvw_ref[:, :2])]
             new_mapping = dict(zip(map(str, idxs), idxs_new.astype(int).tolist()))
-            with open(path, 'w') as f:
+            with open(pathf, 'w') as f:
                 json.dump(new_mapping, f)
 
     except Exception as exc:
@@ -309,10 +309,10 @@ def process_baseline_int(baseline_indices, baselines, mslist):
                 continue
 
             row_idxs += list(mapjson.values())
-            uvw = np.append(np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
+            uvw = np.append(np.memmap(f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
                 [int(i) for i in list(mapjson.keys())]], uvw, axis=0)
 
-            time = np.append(np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
+            time = np.append(np.memmap(f'{path.basename(ms)}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
 
         results.append((list(np.unique(np.abs(row_idxs))), uvw, baseline, time))
     return results

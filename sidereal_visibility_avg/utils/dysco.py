@@ -38,12 +38,13 @@ def decompress(ms):
         return ms
 
 
-def compress(ms):
+def compress(ms, bitrate):
     """
     running DP3 to apply dysco compression
 
     :param:
         - ms: measurement set
+        - bitrate: dysco bitrate
     """
 
     if not is_dysco_compressed(ms):
@@ -51,14 +52,14 @@ def compress(ms):
         print('Apply Dysco compression')
 
         cmd = (f"DP3 msin={ms} msout={ms}.tmp msout.overwrite=true msout.storagemanager=dysco "
-               f"msout.storagemanager.databitrate=12 msout.storagemanager.weightbitrate=12")
+               f"msout.storagemanager.databitrate={bitrate} msout.storagemanager.weightbitrate=12")
 
         steps = []
 
         steps = str(steps).replace("'", "").replace(' ','')
         cmd += f' steps={steps}'
 
-        run_command(cmd+' > /dev/null 2>&1')
+        run_command(cmd)
 
         try:
             t = table(f"{ms}.tmp", ack=False) # test if exists

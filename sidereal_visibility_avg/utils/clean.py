@@ -11,7 +11,7 @@ def clean_mapping_files(msin):
     """
 
     for ms in msin:
-        rmtree(ms + '_baseline_mapping')
+        rmtree(path.basename(ms) + '_baseline_mapping')
 
 def clean_binary_files(folder):
     """
@@ -23,6 +23,10 @@ def clean_binary_files(folder):
 
     for b in glob(folder+'*.tmp.dat'):
         run_command(f'rm {b}')
+
+    if len(glob("*.tmp.dat"))>0:
+        for b in glob("*.tmp.dat"):
+            run_command(f'rm {b}')
 
 
 def clean_binary_file(file):

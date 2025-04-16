@@ -200,7 +200,7 @@ class Template:
             with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(ms)}") as t:
 
                 # Mapping folder for the current MS
-                mapping_folder = self.tmp_folder + ms + '_baseline_mapping'
+                mapping_folder = self.tmp_folder + path.basename(ms) + '_baseline_mapping'
 
                 if not check_folder_exists(mapping_folder):
                     makedirs(mapping_folder, exist_ok=False)
@@ -309,7 +309,7 @@ class Template:
 
                 for ms_idx, ms in enumerate(sorted(self.mslist)):
                     with table(ms, ack=False) as f:
-                        uvw = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                        uvw = np.memmap(f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
                         uvw[:] = f.getcol("UVW")
 
         else:
