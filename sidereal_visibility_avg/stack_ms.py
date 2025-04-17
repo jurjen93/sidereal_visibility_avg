@@ -6,6 +6,7 @@ import psutil
 from glob import glob
 from scipy.ndimage import gaussian_filter1d
 import gc
+from time import sleep
 
 from .utils.arrays_and_lists import find_closest_index_list, add_axis, is_range
 from .utils.file_handling import load_json, read_mapping
@@ -71,7 +72,7 @@ class Stack:
         self.T.putcol('UVW', uvw)
 
 
-    def stack_all(self, column: str = 'DATA', interpolate_uvw: bool = False, safe_mem: bool = False):
+    def stack_all(self, column: str = 'DATA', interpolate_uvw: bool = False, safe_mem: bool = False, extra_cooldowns: bool = False):
         """
         Stack all MS
 
@@ -224,6 +225,8 @@ class Stack:
                     try:
                         gc.collect()
                         new_data.flush()
+                        if extra_cooldowns:
+                            sleep(60)
                     except AttributeError:
                         pass
 

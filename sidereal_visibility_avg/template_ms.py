@@ -392,7 +392,7 @@ class Template:
         nrows = baseline_count*len(time_range)
 
         # Take one ms for temp usage (to remove dysco, and modify)
-        tmp_ms = self.mslist[0]
+        tmp_ms = self.tmp_folder+path.basename(self.mslist[0])
 
         # Remove dysco compression (otherwise running into tricky errors when modifying MS)
         self.tmpfile = decompress(tmp_ms)

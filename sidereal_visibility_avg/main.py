@@ -40,6 +40,7 @@ def parse_args():
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template.')
     parser.add_argument('--dp3_uvw', action='store_true', help='Use DP3 to recalculate UVW values, instead of interpolation (interpolation is probably more precise).')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')
+    parser.add_argument('--extra_cooldowns', action='store_true', help='Add extra 1-minute cooldown moments after intensive parallelisation (seems to help with high I/O jobs)')
     parser.add_argument('--skip_uvw_mapping', action='store_true', help='Do not adjust UVW mapping (needs --keep_mapping from earlier run).')
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
     parser.add_argument('--ncpu', type=int, help='Maximum number of cpus (default is maximum available)', default=None)
@@ -103,7 +104,7 @@ def main():
     if not args.make_only_template:
         start_time = time.time()
         s = Stack(args.msin, args.msout, tmp_folder=args.tmp, chunkmem=args.chunk_factor)
-        s.stack_all(interpolate_uvw=not args.dp3_uvw, safe_mem=args.safe_memory)
+        s.stack_all(interpolate_uvw=not args.dp3_uvw, safe_mem=args.safe_memory, extra_cooldowns=args.extra_cooldowns)
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Elapsed time for stacking: {elapsed_time} seconds")
