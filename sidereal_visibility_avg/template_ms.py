@@ -67,10 +67,10 @@ class Template:
         """
 
         for ms in self.mslist:
-            with taql(f'SELECT ROWID() as row_id FROM {ms}::ANTENNA WHERE NAME="{station}"') as rows:
+            with taql(f'SELECT ROWID() as row_id FROM {path.abspath(ms)}::ANTENNA WHERE NAME="{station}"') as rows:
                 if len(rows) == 1:
                     id = rows[0]['row_id']
-                    with taql(f'SELECT ELEMENT_OFFSET FROM {ms}::LOFAR_ANTENNA_FIELD WHERE ANTENNA_ID={id}') as el:
+                    with taql(f'SELECT ELEMENT_OFFSET FROM {path.abspath(ms)}::LOFAR_ANTENNA_FIELD WHERE ANTENNA_ID={id}') as el:
                         return el.getcol("ELEMENT_OFFSET"), id, ms
         sys.exit(f"ERROR: No {station} in {self.mslist}?")
 
@@ -163,7 +163,7 @@ class Template:
                 _, ind, ms = self.get_element_offset(station)
 
                 # Using taql because the shapes for Dutch and International stations are not similar (cannot be opened in Python)
-                taql(f"INSERT INTO {self.outname}::LOFAR_ANTENNA_FIELD SELECT FROM {ms}::LOFAR_ANTENNA_FIELD b WHERE b.ANTENNA_ID={ind}")
+                taql(f"INSERT INTO {self.outname}::LOFAR_ANTENNA_FIELD SELECT FROM {path.abspath(ms)}::LOFAR_ANTENNA_FIELD b WHERE b.ANTENNA_ID={ind}")
             tnew_field.putcol("ANTENNA_ID", np.array(range(len(stations))))
 
         with table(self.ref_table.getkeyword('LOFAR_STATION'), ack=False) as tnew_ant_tmp:
@@ -392,10 +392,10 @@ class Template:
         nrows = baseline_count*len(time_range)
 
         # Take one ms for temp usage (to remove dysco, and modify)
-        tmp_ms = self.tmp_folder+path.basename(self.mslist[0])
+        tmp_ms = self.mslist[0]
 
         # Remove dysco compression (otherwise running into tricky errors when modifying MS)
-        self.tmpfile = decompress(tmp_ms)
+        self.tmpfile = decompress(tmp_ms, 'tmp.ms')
 
         with table(self.tmpfile, ack=False) as self.ref_table:
 
