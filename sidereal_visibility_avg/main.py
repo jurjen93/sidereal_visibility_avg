@@ -88,10 +88,6 @@ def main():
         time_res = None
         print(f"Additional time sampling factor {avg}\n")
 
-    if args.dp3_uvw is not None:
-        # Because of upsampling in UVW step, we can average time_res
-        avg /= 2
-
     # Make template
     t = Template(args.msin, args.msout, tmp_folder=args.tmp, ncpu=cpucount)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg, dp3_uvw=args.dp3_uvw)

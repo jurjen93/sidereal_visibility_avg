@@ -385,6 +385,7 @@ class Template:
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, time_res)
         else:
+            if dp3_uvw: avg_factor/=2
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, min_dt/avg_factor)
 
@@ -444,7 +445,7 @@ class Template:
             rmtree(self.tmpfile)
 
         # Make UVW column
-        if dp3_uvw:  # Use DP3 for making UVW axis
+        if dp3_uvw: # Use DP3 for making UVW axis
             self.dp3_uvw()
-        else:  # Nearest neighbour interpolation for UVW
+        else: # Nearest neighbour interpolation for UVW
             self.interpolate_uvw()
