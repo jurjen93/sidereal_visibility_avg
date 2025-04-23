@@ -224,18 +224,18 @@ class Template:
                 else:
                     print(f'{mapping_folder} already exists')
 
-    def calculate_uvw(self):
+    def dp3_uvw(self):
         """
         Calculate UVW with DP3
         """
 
-        # Make baseline/time mapping
-        self.make_mapping_lst()
-
         # Use DP3 to upsample and downsample, recalculating the UVW coordinates
-        run_command(f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up,avg] "
-                    f"up.type=upsample up.timestep=2 up.updateuvw=True avg.type=averager avg.timestep=2 "
-                    f"&& rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}")
+        cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] up.type=upsample up.timestep=2 up.updateuvw=True"
+        cmd += f" && rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}"
+        run_command(cmd)
+
+        # Make LST baseline/time mapping
+        self.make_mapping_lst()
 
         # Update baseline mapping
         self.make_mapping_uvw()
@@ -280,8 +280,8 @@ class Template:
                         results = future.result()
                         for row_idxs, uvws, baseline, time in results:
                             UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
-                    except Exception:
-                        print(f"No data for baseline {baseline}")
+                    except Exception as e:
+                        print(f"No data for baseline {baseline}.\n{e}")
 
             UVW.flush()
             T.putcol("UVW", UVW)
@@ -333,7 +333,7 @@ class Template:
 
         gc.collect()
 
-    def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1):
+    def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1, dp3_uvw: bool = False):
         """
         Make template MS based on existing MS
 
@@ -341,6 +341,7 @@ class Template:
             - overwrite: overwrite output file
             - time_res: time resolution in seconds
             - avg_factor: averaging factor
+            - dp3_uvw: recalculate UVW with DP3
         """
 
         if overwrite:
@@ -383,7 +384,6 @@ class Template:
         if time_res is not None:
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, time_res)
-
         else:
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, min_dt/avg_factor)
@@ -442,3 +442,9 @@ class Template:
         # Cleanup
         if 'tmp' in self.tmpfile:
             rmtree(self.tmpfile)
+
+        # Make UVW column
+        if dp3_uvw:  # Use DP3 for making UVW axis
+            self.dp3_uvw()
+        else:  # Nearest neighbour interpolation for UVW
+            self.interpolate_uvw()

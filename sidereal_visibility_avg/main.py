@@ -41,7 +41,6 @@ def parse_args():
     parser.add_argument('--dp3_uvw', action='store_true', help='Use DP3 to recalculate UVW values, instead of interpolation (interpolation is probably more precise).')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')
     parser.add_argument('--extra_cooldowns', action='store_true', help='Add extra 1-minute cooldown moments after intensive parallelisation (seems to help with high I/O jobs)')
-    parser.add_argument('--skip_uvw_mapping', action='store_true', help='Do not adjust UVW mapping (needs --keep_mapping from earlier run).')
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
     parser.add_argument('--ncpu', type=int, help='Maximum number of cpus (default is maximum available)', default=None)
 
@@ -89,15 +88,13 @@ def main():
         time_res = None
         print(f"Additional time sampling factor {avg}\n")
 
+    if args.dp3_uvw is not None:
+        # Because of upsampling in UVW step, we can average time_res
+        avg /= 2
+
     # Make template
     t = Template(args.msin, args.msout, tmp_folder=args.tmp, ncpu=cpucount)
-    t.make_template(overwrite=True, time_res=time_res, avg_factor=avg)
-    if args.skip_uvw_mapping:
-        print('--skip_uvw_mapping requested --> use already existing mapping files')
-    elif args.dp3_uvw: # Use DP3 for making UVW axis
-        t.calculate_uvw()
-    else: # Nearest neighbour interpolation for UVW
-        t.interpolate_uvw()
+    t.make_template(overwrite=True, time_res=time_res, avg_factor=avg, dp3_uvw=args.dp3_uvw)
     print("\n############\nTemplate creation completed\n############")
 
     # Stack MS
