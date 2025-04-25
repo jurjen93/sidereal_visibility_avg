@@ -31,7 +31,7 @@ def decompress(ms, msout):
 
         if path.exists(f'{msout}'):
             rmtree(f'{msout}')
-        run_command(f"DP3 msin={ms} msout={msout} steps=[] > /dev/null 2>&1")
+        run_command(f"DP3 msin={ms} msout={msout} steps=[]")
         print('----------')
         return msout
 
