@@ -231,7 +231,7 @@ class Template:
         # Use DP3 to upsample and downsample, recalculating the UVW coordinates
         cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] up.type=upsample up.timestep=2 up.updateuvw=True"
         if dysco_bitrate is not None:
-            cmd+=f" msout.storagemanager='dysco' msout.storagemanager.bitrate={dysco_bitrate}"
+            cmd+=f" msout.storagemanager='dysco' msout.storagemanager.databitrate={dysco_bitrate}"
         cmd += f" && rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}"
         run_command(cmd)
 
