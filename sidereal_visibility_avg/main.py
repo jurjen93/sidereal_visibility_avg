@@ -42,7 +42,9 @@ def parse_args():
     parser.add_argument('--extra_cooldowns', action='store_true', help='Add extra 1-minute cooldown moments after intensive parallelisation (seems to help with high I/O jobs)')
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
     parser.add_argument('--ncpu', type=int, help='Maximum number of cpus (default is maximum available)', default=None)
-    parser.add_argument('--only_lst_mapping', action='store_true', help='Only LST UVW mapping (faster but perhaps less accurate)')
+    parser.add_argument('--only_lst_mapping', action='store_true', help='Only LST UVW mapping (faster but perhaps less accurate).')
+    parser.add_argument('--interpolate_uvw', action='store_true', help='UVW interpolation before data stacking (alternative method from DP3 recalculation).')
+
     return parser.parse_args()
 
 
@@ -90,7 +92,7 @@ def main():
     # Make template
     t = Template(args.msin, args.msout, tmp_folder=args.tmp, ncpu=cpucount)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg, dysco_bitrate=args.dysco_bitrate,
-                    only_lst_mapping=args.only_lst_mapping)
+                    only_lst_mapping=args.only_lst_mapping, interpolate_uvw=args.interpolate_uvw)
     print("\n############\nTemplate creation completed\n############")
 
     # Stack MS

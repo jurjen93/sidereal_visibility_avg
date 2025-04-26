@@ -8,13 +8,14 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import gc
 from functools import partial
 
-from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw
+from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
 from .utils.dysco import is_dysco_compressed, decompress
 from .utils.arrays_and_lists import repeat_elements, map_array_dict, find_closest_index_list
 from .utils.file_handling import check_folder_exists
 from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
 from .utils.lst import mjd_seconds_to_lst_seconds, mjd_seconds_to_lst_seconds_single
 from .utils.printing import print_progress_bar
+from .utils.uvw import resample_uwv
 
 
 class Template:
@@ -223,14 +224,14 @@ class Template:
                 else:
                     print(f'{mapping_folder} already exists')
 
-    def make_uvw(self, dysco_bitrate: int = None, only_lst_mapping: bool = False):
+    def make_uvw(self, dysco_bitrate: int = None, only_lst_mapping: bool = False, interpolate_uvw: bool = False):
         """
         Calculate UVW with DP3
         """
 
         # # Use DP3 to upsample and downsample, recalculating the UVW coordinates
-        if not only_lst_mapping:
-            cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] up.type=upsample up.timestep=2 up.updateuvw=True"
+        if not only_lst_mapping and not interpolate_uvw:
+            cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up,avg] avg.type=averager avg.timestep=2 up.type=upsample up.timestep=2 up.updateuvw=True"
             if dysco_bitrate is not None:
                 cmd+=f" msout.storagemanager='dysco' msout.storagemanager.databitrate={dysco_bitrate}"
             cmd += f" && rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}"
@@ -239,11 +240,62 @@ class Template:
         # Make LST baseline/time mapping
         self.make_mapping_lst()
 
+        if interpolate_uvw:
+            if is_dysco_compressed(self.outname):
+                decompress(self.outname)
+            self.nearest_interpol_uvw()
+
         # Update baseline mapping with nearest neighbour
         if not only_lst_mapping:
             self.make_mapping_uvw()
 
-    def make_mapping_uvw(self):
+    def interpolate_uvw(self):
+        """
+        Nearest neighbour interpolation (alternative UVW)
+        """
+
+        # Get baselines
+        with table(self.outname + "::ANTENNA", ack=False) as ants:
+            baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
+
+        print("Resample UVW through interpolation")
+        with table(self.outname, readonly=False, ack=False) as T:
+            UVW = np.memmap(self.tmp_folder+'UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
+            TIME = np.memmap(self.tmp_folder+'TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
+            TIME[:] = T.getcol("TIME")
+
+            for ms_idx, ms in enumerate(sorted(self.mslist)):
+                with table(ms, ack=False) as f:
+                    uvw = np.memmap(self.tmp_folder+f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                    time = np.memmap(self.tmp_folder+f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
+
+                    uvw[:] = f.getcol("UVW")
+                    time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
+
+            # Determine number of workers
+            num_workers = min(max(cpu_count()-1, 1), 64)
+
+            batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
+            with ProcessPoolExecutor(max_workers=self.ncpu) as executor:
+                future_to_baseline = {
+                    executor.submit(process_baseline_int, range(i, min(i + batch_size, len(baselines))), baselines,
+                                    self.mslist, self.tmp_folder): i
+                    for i in range(0, len(baselines), batch_size)
+                }
+
+                for future in as_completed(future_to_baseline):
+                    results = future.result()
+                    for row_idxs, uvws, baseline, time in results:
+                        if len(time)>0:
+                            UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
+                        else:
+                            print(f"No data for baseline {baseline}.")
+            UVW.flush()
+            T.putcol("UVW", UVW)
+
+        gc.collect()
+
+    def nearest_interpol_uvw(self):
         """
         Update UVW mapping with nearest neighbouring
         """
@@ -286,7 +338,7 @@ class Template:
         gc.collect()
 
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1, dysco_bitrate: int = None,
-                      only_lst_mapping: bool = None):
+                      only_lst_mapping: bool = False, interpolate_uvw: bool = False):
         """
         Make template MS based on existing MS
 
@@ -296,6 +348,7 @@ class Template:
             - avg_factor: averaging factor
             - dysco_bitrate: Dysco compression bit rate
             - only_lst_mapping: Only LST mapping
+            - interpolate_uvw: Interpolate UVW (alternative method from DP3 UVW recalculation)
         """
 
         if overwrite:
@@ -336,11 +389,13 @@ class Template:
 
         # Make time axis for output MS
         if time_res is not None:
-            time_res*=2 # Because DP3 will upsample
+            # if not interpolate_uvw:
+            #     time_res*=2 # Because DP3 will upsample
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, time_res)
         else:
-            avg_factor/=2 # Because DP3 will upsample
+            # if not interpolate_uvw:
+            #     avg_factor/=2 # Because DP3 will upsample
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, min_dt/avg_factor)
 
@@ -402,4 +457,4 @@ class Template:
                     print(f"Error processing '{subtbl}': {e}")
 
         # Make UVW column
-        self.make_uvw(dysco_bitrate=dysco_bitrate, only_lst_mapping=only_lst_mapping)
+        self.make_uvw(dysco_bitrate=dysco_bitrate, only_lst_mapping=only_lst_mapping, interpolate_uvw=interpolate_uvw)

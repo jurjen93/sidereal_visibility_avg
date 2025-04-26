@@ -16,7 +16,7 @@ def is_dysco_compressed(ms):
         return t.getdesc()["DATA"]['dataManagerGroup'] == 'DyscoData'
 
 
-def decompress(ms, msout):
+def decompress(ms, msout='tmp.ms'):
     """
     running DP3 to remove dysco compression
 
@@ -32,8 +32,11 @@ def decompress(ms, msout):
         if path.exists(f'{msout}'):
             rmtree(f'{msout}')
         run_command(f"DP3 msin={ms} msout={msout} steps=[]")
-        print('----------')
-        return msout
+        if msout=='tmp.ms':
+            run_command(f"rm -rf {ms} && mv {msout} {ms}")
+            return ms
+        else:
+            return msout
 
     else:
         return ms
