@@ -8,12 +8,11 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import gc
 from functools import partial
 
-from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
-from .utils.dysco import decompress, is_dysco_compressed
+from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw
+from .utils.dysco import is_dysco_compressed
 from .utils.arrays_and_lists import repeat_elements, map_array_dict, find_closest_index_list
 from .utils.file_handling import check_folder_exists
 from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
-from .utils.uvw import resample_uwv
 from .utils.lst import mjd_seconds_to_lst_seconds, mjd_seconds_to_lst_seconds_single
 from .utils.printing import print_progress_bar
 
@@ -242,57 +241,6 @@ class Template:
         # Update baseline mapping with nearest neighbour
         self.make_mapping_uvw()
 
-    def old_uvw_interpolation(self):
-        """
-        Fill UVW data points through interpolation
-        """
-
-        # Make baseline/time mapping
-        self.make_mapping_lst()
-
-        # Get baselines
-        with table(self.outname + "::ANTENNA", ack=False) as ants:
-            baselines = np.c_[make_ant_pairs(ants.nrows(), 1)]
-
-        print("Resample UVW through interpolation")
-        with table(self.outname, readonly=False, ack=False) as T:
-            UVW = np.memmap(self.tmp_folder+'UVW.tmp.dat', dtype=np.float32, mode='w+', shape=(T.nrows(), 3))
-            TIME = np.memmap(self.tmp_folder+'TIME.tmp.dat', dtype=np.float64, mode='w+', shape=(T.nrows()))
-            TIME[:] = T.getcol("TIME")
-
-            for ms_idx, ms in enumerate(sorted(self.mslist)):
-                with table(ms, ack=False) as f:
-                    uvw = np.memmap(self.tmp_folder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
-                    time = np.memmap(self.tmp_folder+f'{path.basename(ms)}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
-
-                    uvw[:] = f.getcol("UVW")
-                    time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
-
-            batch_size = max(1, len(baselines) // self.ncpu)  # Ensure at least one baseline per batch
-
-            with ProcessPoolExecutor(max_workers=self.ncpu) as executor:
-                future_to_baseline = {
-                    executor.submit(process_baseline_int, range(i, min(i + batch_size, len(baselines))), baselines,
-                                    self.mslist, self.tmp_folder): i
-                    for i in range(0, len(baselines), batch_size)
-                }
-
-                for future in as_completed(future_to_baseline):
-                    results = future.result()
-                    for row_idxs, uvws, baseline, time in results:
-                        if len(time) > 0:
-                            UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
-                        else:
-                            print(f"No data for baseline {baseline}.")
-
-            UVW.flush()
-            T.putcol("UVW", UVW)
-
-        gc.collect()
-
-        # Make final mapping
-        self.make_mapping_uvw()
-
     def make_mapping_uvw(self):
         """
         Update mapping json files essential for efficient and accurate UVW averaging
@@ -321,7 +269,7 @@ class Template:
         print('\nMake final UVW mapping to output dataset')
         msdir = '/'.join(self.mslist[0].split('/')[0:-1])
         process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW, tmpfolder=self.tmp_folder)
-        with ProcessPoolExecutor(max_workers=self.ncpu) as executor:
+        with ProcessPoolExecutor(max_workers=np.min(self.ncpu, 4)) as executor:
             future_to_baseline = {executor.submit(process_func, baseline): baseline for baseline in baselines}
 
             for n, future in enumerate(as_completed(future_to_baseline)):
