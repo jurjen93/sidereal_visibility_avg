@@ -3,7 +3,7 @@ LOFAR SIDEREAL VISIBILITY AVERAGER (see https://arxiv.org/pdf/2501.07374)
 """
 
 import sys
-import time
+from time import time, sleep
 from argparse import ArgumentParser
 from shutil import rmtree
 from multiprocessing import cpu_count
@@ -37,13 +37,12 @@ def parse_args():
     parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM storage (slower but less RAM cost).')
     parser.add_argument('--chunk_factor', type=float, help='Factor to reduce chunk size if RAM issues', default=1.)
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template.')
-    parser.add_argument('--keep_DP3_uvw', action='store_true', help='Keep DP3 UVW (without reinterpolation).')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')
-    parser.add_argument('--extra_cooldowns', action='store_true', help='Add extra 1-minute cooldown moments after intensive parallelisation (seems to help with high I/O jobs)')
+    parser.add_argument('--extra_cooldowns', action='store_true', help='Add extra 1-minute cooldown moments after intensive parallelisation (seems to magically help with intensive I/O jobs...).')
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
-    parser.add_argument('--ncpu', type=int, help='Maximum number of cpus (default is maximum available)', default=None)
-    parser.add_argument('--only_lst_mapping', action='store_true', help='Only LST UVW mapping (faster but perhaps less accurate).')
-    parser.add_argument('--interpolate_uvw', action='store_true', help='UVW interpolation before data stacking (alternative method from using DP3 to calculate UVW).')
+    parser.add_argument('--ncpu', type=int, help='Maximum number of cpus (default is maximum available).', default=None)
+    parser.add_argument('--only_lst_mapping', action='store_true', help='Only LST UVW mapping (faster but less accurate).')
+    parser.add_argument('--dp3_uvw', action='store_true', help='Make UVW coordinates with DP3.')
 
     return parser.parse_args()
 
@@ -71,7 +70,7 @@ def main():
     if check_folder_exists(args.msout):
         print(f"{args.msout} already exists, will be overwritten")
         rmtree(args.msout)
-        time.sleep(5) # ensure that file is deleted with extra processing time
+        sleep(5) # ensure that file is deleted with extra processing time
 
     # time averaging (upsampling factor)
     avg = 1
@@ -92,16 +91,15 @@ def main():
     # Make template
     t = Template(args.msin, args.msout, tmp_folder=args.tmp, ncpu=cpucount)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg, dysco_bitrate=args.dysco_bitrate,
-                    only_lst_mapping=args.only_lst_mapping, interpolate_uvw=args.interpolate_uvw)
+                    only_lst_mapping=args.only_lst_mapping, DP3_uvw=args.dp3_uvw)
     print("\n############\nTemplate creation completed\n############")
 
     # Stack MS
     if not args.make_only_template:
-        start_time = time.time()
+        start_time = time()
         s = Stack(args.msin, args.msout, tmp_folder=args.tmp, chunkmem=args.chunk_factor)
-        s.stack_all(keep_DP3_uvw=args.keep_DP3_uvw, safe_mem=args.safe_memory, extra_cooldowns=args.extra_cooldowns)
-        end_time = time.time()
-        elapsed_time = end_time - start_time
+        s.stack_all(keep_DP3_uvw=args.dp3_uvw, safe_mem=args.safe_memory, extra_cooldowns=args.extra_cooldowns)
+        elapsed_time = time() - start_time
         print(f"Elapsed time for stacking: {elapsed_time} seconds")
 
     # Clean up mapping files

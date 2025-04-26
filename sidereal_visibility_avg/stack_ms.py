@@ -99,6 +99,8 @@ class Stack:
                 # Arrays to fill
                 if col == 'UVW':
                     new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
+                    if keep_DP3_uvw:
+                        new_data = self.T.getcol("UVW")
                 elif col=='WEIGHT_SPECTRUM':
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
                 else:

@@ -224,13 +224,13 @@ class Template:
                 else:
                     print(f'{mapping_folder} already exists')
 
-    def make_uvw(self, dysco_bitrate: int = None, only_lst_mapping: bool = False, interpolate_uvw: bool = False):
+    def make_uvw(self, dysco_bitrate: int = None, only_lst_mapping: bool = False, DP3_uvw: bool = False):
         """
-        Calculate UVW with DP3
+        Calculate UVW with DP3 (this step also compresses data)
         """
 
-        # # Use DP3 to upsample and downsample, recalculating the UVW coordinates
-        if not only_lst_mapping and not interpolate_uvw:
+        # # Use DP3 to calculate UVW coordinates
+        if not only_lst_mapping and DP3_uvw:
             cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] up.type=upsample up.timestep=2 up.updateuvw=True"
             if dysco_bitrate is not None:
                 cmd+=f" msout.storagemanager='dysco' msout.storagemanager.databitrate={dysco_bitrate}"
@@ -243,10 +243,8 @@ class Template:
         self.make_mapping_lst()
 
         # Nearest neighbouring interpolation of UVW
-        if interpolate_uvw and not only_lst_mapping:
+        if not DP3_uvw and not only_lst_mapping:
             self.nearest_interpol_uvw()
-        elif interpolate_uvw and only_lst_mapping:
-            print("WARNING: --interpolate_uvw skipped because --only_lst_mapping==True")
 
         # Update baseline mapping
         if not only_lst_mapping:
@@ -341,7 +339,7 @@ class Template:
         gc.collect()
 
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1, dysco_bitrate: int = None,
-                      only_lst_mapping: bool = False, interpolate_uvw: bool = False):
+                      only_lst_mapping: bool = False, DP3_uvw: bool = False):
         """
         Make template MS based on existing MS
 
@@ -351,7 +349,7 @@ class Template:
             - avg_factor: averaging factor
             - dysco_bitrate: Dysco compression bit rate
             - only_lst_mapping: Only LST mapping
-            - interpolate_uvw: Interpolate UVW (alternative method from DP3 UVW recalculation)
+            - DP3_uvw: Use DP3 to calculate uvw
         """
 
         if overwrite:
@@ -392,12 +390,12 @@ class Template:
 
         # Make time axis for output MS
         if time_res is not None:
-            if not interpolate_uvw:
+            if DP3_uvw:
                 time_res*=2 # Because DP3 will upsample
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, time_res)
         else:
-            if not interpolate_uvw:
+            if DP3_uvw:
                 avg_factor/=2 # Because DP3 will upsample
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, min_dt/avg_factor)
@@ -460,4 +458,4 @@ class Template:
                     print(f"Error processing '{subtbl}': {e}")
 
         # Make UVW column
-        self.make_uvw(dysco_bitrate=dysco_bitrate, only_lst_mapping=only_lst_mapping, interpolate_uvw=interpolate_uvw)
+        self.make_uvw(dysco_bitrate=dysco_bitrate, only_lst_mapping=only_lst_mapping, DP3_uvw=DP3_uvw)
