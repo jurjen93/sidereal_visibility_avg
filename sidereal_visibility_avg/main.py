@@ -43,7 +43,7 @@ def parse_args():
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
     parser.add_argument('--ncpu', type=int, help='Maximum number of cpus (default is maximum available)', default=None)
     parser.add_argument('--only_lst_mapping', action='store_true', help='Only LST UVW mapping (faster but perhaps less accurate).')
-    parser.add_argument('--interpolate_uvw', action='store_true', help='UVW interpolation before data stacking (alternative method from DP3 recalculation).')
+    parser.add_argument('--interpolate_uvw', action='store_true', help='UVW interpolation before data stacking (alternative method from using DP3 to calculate UVW).')
 
     return parser.parse_args()
 

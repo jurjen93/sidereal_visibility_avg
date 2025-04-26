@@ -236,19 +236,19 @@ class Template:
                 cmd+=f" msout.storagemanager='dysco' msout.storagemanager.databitrate={dysco_bitrate}"
             cmd += f" && rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}"
             run_command(cmd)
+        elif dysco_bitrate is not None:
+            compress(self.outname, dysco_bitrate)
 
         # Make LST baseline/time mapping
         self.make_mapping_lst()
 
-        # Nearest neighbouring interpolation
+        # Nearest neighbouring interpolation of UVW
         if interpolate_uvw and not only_lst_mapping:
-            if dysco_bitrate is not None:
-                compress(self.outname, dysco_bitrate)
             self.nearest_interpol_uvw()
         elif interpolate_uvw and only_lst_mapping:
             print("WARNING: --interpolate_uvw skipped because --only_lst_mapping==True")
 
-        # Update baseline mapping with nearest neighbour
+        # Update baseline mapping
         if not only_lst_mapping:
             self.make_mapping_uvw()
 
@@ -300,7 +300,7 @@ class Template:
 
     def make_mapping_uvw(self):
         """
-        Update UVW mapping with nearest neighbouring
+        Update UVW mapping
         """
 
         # Get baselines
