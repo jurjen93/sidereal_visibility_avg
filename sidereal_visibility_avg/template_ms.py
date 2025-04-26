@@ -249,7 +249,7 @@ class Template:
         if not only_lst_mapping:
             self.make_mapping_uvw()
 
-    def interpolate_uvw(self):
+    def make_mapping_uvw(self):
         """
         Nearest neighbour interpolation (alternative UVW)
         """
@@ -266,8 +266,8 @@ class Template:
 
             for ms_idx, ms in enumerate(sorted(self.mslist)):
                 with table(ms, ack=False) as f:
-                    uvw = np.memmap(self.tmp_folder+f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
-                    time = np.memmap(self.tmp_folder+f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
+                    uvw = np.memmap(self.tmp_folder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                    time = np.memmap(self.tmp_folder+f'{path.basename(ms)}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
 
                     uvw[:] = f.getcol("UVW")
                     time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
