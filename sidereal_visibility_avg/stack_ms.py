@@ -72,21 +72,21 @@ class Stack:
         self.T.putcol('UVW', uvw)
 
 
-    def stack_all(self, column: str = 'DATA', interpolate_uvw: bool = False, safe_mem: bool = False, extra_cooldowns: bool = False):
+    def stack_all(self, column: str = 'DATA', keep_DP3_uvw: bool = False, safe_mem: bool = False, extra_cooldowns: bool = False):
         """
         Stack all MS
 
         :param:
             - column: column name (currently only DATA)
-            - interpolate_uvw: interpolate uvw coordinates (nearest neightbour + weighted average)
+            - keep_DP3_uvw: keep DP3 UVW, no weighted average
             - safe_mem: limit RAM usage
         """
 
         if column == 'DATA':
-            if interpolate_uvw:
-                columns = ['UVW', column, 'WEIGHT_SPECTRUM']
-            else:
+            if keep_DP3_uvw:
                 columns = [column, 'WEIGHT_SPECTRUM']
+            else:
+                columns = ['UVW', column, 'WEIGHT_SPECTRUM']
         else:
             sys.exit("ERROR: Only column 'DATA' allowed (for now)")
 

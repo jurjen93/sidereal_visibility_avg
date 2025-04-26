@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM storage (slower but less RAM cost).')
     parser.add_argument('--chunk_factor', type=float, help='Factor to reduce chunk size if RAM issues', default=1.)
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template.')
-    parser.add_argument('--no_interpolation', action='store_true', help='Do not interpolate UVW (keep DP3 UVW).')
+    parser.add_argument('--keep_DP3_uvw', action='store_true', help='Keep DP3 UVW (without reinterpolation).')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')
     parser.add_argument('--extra_cooldowns', action='store_true', help='Add extra 1-minute cooldown moments after intensive parallelisation (seems to help with high I/O jobs)')
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
@@ -99,7 +99,7 @@ def main():
     if not args.make_only_template:
         start_time = time.time()
         s = Stack(args.msin, args.msout, tmp_folder=args.tmp, chunkmem=args.chunk_factor)
-        s.stack_all(interpolate_uvw=not args.no_interpolation, safe_mem=args.safe_memory, extra_cooldowns=args.extra_cooldowns)
+        s.stack_all(keep_DP3_uvw=args.keep_DP3_uvw, safe_mem=args.safe_memory, extra_cooldowns=args.extra_cooldowns)
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Elapsed time for stacking: {elapsed_time} seconds")
