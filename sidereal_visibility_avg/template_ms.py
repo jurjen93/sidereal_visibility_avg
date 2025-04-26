@@ -252,7 +252,7 @@ class Template:
         if not only_lst_mapping:
             self.make_mapping_uvw()
 
-    def make_mapping_uvw(self):
+    def nearest_interpol_uvw(self):
         """
         Nearest neighbour interpolation (alternative UVW)
         """
@@ -298,7 +298,7 @@ class Template:
 
         gc.collect()
 
-    def nearest_interpol_uvw(self):
+    def make_mapping_uvw(self):
         """
         Update UVW mapping with nearest neighbouring
         """
