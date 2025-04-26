@@ -223,23 +223,25 @@ class Template:
                 else:
                     print(f'{mapping_folder} already exists')
 
-    def make_uvw(self, dysco_bitrate: int = None):
+    def make_uvw(self, dysco_bitrate: int = None, only_lst_mapping: bool = False):
         """
         Calculate UVW with DP3
         """
 
         # # Use DP3 to upsample and downsample, recalculating the UVW coordinates
-        cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] up.type=upsample up.timestep=2 up.updateuvw=True"
-        if dysco_bitrate is not None:
-            cmd+=f" msout.storagemanager='dysco' msout.storagemanager.databitrate={dysco_bitrate}"
-        cmd += f" && rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}"
-        run_command(cmd)
+        if not only_lst_mapping:
+            cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] up.type=upsample up.timestep=2 up.updateuvw=True"
+            if dysco_bitrate is not None:
+                cmd+=f" msout.storagemanager='dysco' msout.storagemanager.databitrate={dysco_bitrate}"
+            cmd += f" && rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}"
+            run_command(cmd)
 
         # Make LST baseline/time mapping
         self.make_mapping_lst()
 
         # Update baseline mapping with nearest neighbour
-        self.make_mapping_uvw()
+        if not only_lst_mapping:
+            self.make_mapping_uvw()
 
     def make_mapping_uvw(self):
         """
@@ -283,7 +285,8 @@ class Template:
 
         gc.collect()
 
-    def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1, dysco_bitrate: int = None):
+    def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1, dysco_bitrate: int = None,
+                      only_lst_mapping: bool = None):
         """
         Make template MS based on existing MS
 
@@ -292,6 +295,7 @@ class Template:
             - time_res: time resolution in seconds
             - avg_factor: averaging factor
             - dysco_bitrate: Dysco compression bit rate
+            - only_lst_mapping: Only LST mapping
         """
 
         if overwrite:
@@ -398,4 +402,4 @@ class Template:
                     print(f"Error processing '{subtbl}': {e}")
 
         # Make UVW column
-        self.make_uvw(dysco_bitrate=dysco_bitrate)
+        self.make_uvw(dysco_bitrate=dysco_bitrate, only_lst_mapping=only_lst_mapping)
