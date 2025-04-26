@@ -276,12 +276,12 @@ class Template:
                 }
 
                 for future in as_completed(future_to_baseline):
-                    try:
-                        results = future.result()
-                        for row_idxs, uvws, baseline, time in results:
+                    results = future.result()
+                    for row_idxs, uvws, baseline, time in results:
+                        if len(time) > 0:
                             UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
-                    except Exception as e:
-                        print(f"No data for baseline {baseline}.\n{e}")
+                        else:
+                            print(f"No data for baseline {baseline}.")
 
             UVW.flush()
             T.putcol("UVW", UVW)
