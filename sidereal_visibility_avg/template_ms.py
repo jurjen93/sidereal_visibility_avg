@@ -9,7 +9,7 @@ import gc
 from functools import partial
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
-from .utils.dysco import is_dysco_compressed, decompress
+from .utils.dysco import is_dysco_compressed, compress
 from .utils.arrays_and_lists import repeat_elements, map_array_dict, find_closest_index_list
 from .utils.file_handling import check_folder_exists
 from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
@@ -231,7 +231,7 @@ class Template:
 
         # # Use DP3 to upsample and downsample, recalculating the UVW coordinates
         if not only_lst_mapping and not interpolate_uvw:
-            cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up,avg] avg.type=averager avg.timestep=2 up.type=upsample up.timestep=2 up.updateuvw=True"
+            cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] up.type=upsample up.timestep=2 up.updateuvw=True"
             if dysco_bitrate is not None:
                 cmd+=f" msout.storagemanager='dysco' msout.storagemanager.databitrate={dysco_bitrate}"
             cmd += f" && rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}"
@@ -240,10 +240,13 @@ class Template:
         # Make LST baseline/time mapping
         self.make_mapping_lst()
 
-        if interpolate_uvw:
-            if is_dysco_compressed(self.outname):
-                decompress(self.outname)
+        # Nearest neighbouring interpolation
+        if interpolate_uvw and not only_lst_mapping:
+            if dysco_bitrate is not None:
+                compress(self.outname, dysco_bitrate)
             self.nearest_interpol_uvw()
+        elif interpolate_uvw and only_lst_mapping:
+            print("WARNING: --interpolate_uvw skipped because --only_lst_mapping==True")
 
         # Update baseline mapping with nearest neighbour
         if not only_lst_mapping:
@@ -389,13 +392,13 @@ class Template:
 
         # Make time axis for output MS
         if time_res is not None:
-            # if not interpolate_uvw:
-            #     time_res*=2 # Because DP3 will upsample
+            if not interpolate_uvw:
+                time_res*=2 # Because DP3 will upsample
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, time_res)
         else:
-            # if not interpolate_uvw:
-            #     avg_factor/=2 # Because DP3 will upsample
+            if not interpolate_uvw:
+                avg_factor/=2 # Because DP3 will upsample
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, min_dt/avg_factor)
 
