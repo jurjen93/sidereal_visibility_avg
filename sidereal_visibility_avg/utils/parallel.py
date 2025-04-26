@@ -303,14 +303,14 @@ def process_baseline_int(baseline_indices, baselines, mslist, tmpfolder):
             mappingfolder = ms + '_baseline_mapping'
             try:
                 mapjson = json.load(open(mappingfolder + '/' + '-'.join([str(a) for a in baseline]) + '.json'))
-                row_idxs += list(mapjson.values())
-                uvw = np.append(np.memmap(tmpfolder + f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
-                        [int(i) for i in list(mapjson.keys())]], uvw, axis=0)
-
-                time = np.append(np.memmap(tmpfolder + f'{path.basename(ms)}_time.tmp.dat', dtype=np.float32)
-                                 [[int(i) for i in list(mapjson.keys())]], time)
             except FileNotFoundError:
-                pass
+                continue
+
+            row_idxs += list(mapjson.values())
+            uvw = np.append(np.memmap(tmpfolder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
+                [int(i) for i in list(mapjson.keys())]], uvw, axis=0)
+
+            time = np.append(np.memmap(tmpfolder+f'{path.basename(ms)}_time.tmp.dat', dtype=np.float32)[[int(i) for i in list(mapjson.keys())]], time)
 
         results.append((list(np.unique(np.abs(row_idxs))), uvw, baseline, time))
     return results

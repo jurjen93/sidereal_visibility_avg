@@ -9,7 +9,7 @@ import gc
 from functools import partial
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
-from .utils.dysco import decompress
+from .utils.dysco import decompress, is_dysco_compressed
 from .utils.arrays_and_lists import repeat_elements, map_array_dict, find_closest_index_list
 from .utils.file_handling import check_folder_exists
 from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
@@ -224,23 +224,25 @@ class Template:
                 else:
                     print(f'{mapping_folder} already exists')
 
-    def dp3_uvw(self):
+    def make_uvw(self, dysco_bitrate: int = None):
         """
         Calculate UVW with DP3
         """
 
         # Use DP3 to upsample and downsample, recalculating the UVW coordinates
         cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] up.type=upsample up.timestep=2 up.updateuvw=True"
+        if dysco_bitrate is not None:
+            cmd+=f" msout.storagemanager='dysco' msout.storagemanager.bitrate={dysco_bitrate}"
         cmd += f" && rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}"
         run_command(cmd)
 
         # Make LST baseline/time mapping
         self.make_mapping_lst()
 
-        # Update baseline mapping
+        # Update baseline mapping with nearest neighbour
         self.make_mapping_uvw()
 
-    def interpolate_uvw(self):
+    def old_uvw_interpolation(self):
         """
         Fill UVW data points through interpolation
         """
@@ -333,7 +335,7 @@ class Template:
 
         gc.collect()
 
-    def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1, dp3_uvw: bool = False):
+    def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1, dysco_bitrate: int = None):
         """
         Make template MS based on existing MS
 
@@ -341,7 +343,7 @@ class Template:
             - overwrite: overwrite output file
             - time_res: time resolution in seconds
             - avg_factor: averaging factor
-            - dp3_uvw: recalculate UVW with DP3
+            - dysco_bitrate: Dysco compression bit rate
         """
 
         if overwrite:
@@ -382,10 +384,11 @@ class Template:
 
         # Make time axis for output MS
         if time_res is not None:
+            time_res*=2 # Because DP3 will upsample
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, time_res)
         else:
-            if dp3_uvw: avg_factor/=2
+            avg_factor/=2 # Because DP3 will upsample
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, min_dt/avg_factor)
 
@@ -395,10 +398,7 @@ class Template:
         # Take one ms for temp usage (to remove dysco, and modify)
         tmp_ms = self.mslist[0]
 
-        # Remove dysco compression (otherwise running into tricky errors when modifying MS)
-        self.tmpfile = decompress(tmp_ms, 'tmp.ms')
-
-        with table(self.tmpfile, ack=False) as self.ref_table:
+        with table(tmp_ms, ack=False) as self.ref_table:
 
             # Data description
             newdesc_data = self.ref_table.getdesc()
@@ -406,6 +406,13 @@ class Template:
             # Reshape
             for col in ['DATA', 'FLAG', 'WEIGHT_SPECTRUM']:
                 newdesc_data[col]['shape'] = np.array([self.chan_num, 4])
+
+            # If Dysco compressed
+            if is_dysco_compressed(tmp_ms):
+                newdesc_data['DATA']['dataManagerType'] = 'TiledColumnStMan'
+                newdesc_data['WEIGHT_SPECTRUM']['dataManagerType'] = 'TiledColumnStMan'
+                newdesc_data['DATA']['dataManagerGroup'] = 'TiledData'
+                newdesc_data['WEIGHT_SPECTRUM']['dataManagerGroup'] = 'TiledWeightSpectrum'
 
             newdesc_data.pop('_keywords_')
 
@@ -434,18 +441,11 @@ class Template:
                            'LOFAR_ELEMENT_FAILURE', 'OBSERVATION', 'POINTING',
                            'POLARIZATION', 'PROCESSOR', 'STATE']:
                 try:
-                    with table(self.tmpfile+"::"+subtbl, ack=False, readonly=False) as tsub:
+                    with table(tmp_ms+"::"+subtbl, ack=False, readonly=False) as tsub:
                         tsub.copy(self.outname + '/' + subtbl, deep=True)
                         tsub.flush(True)
                 except Exception as e:
                     print(f"Error processing '{subtbl}': {e}")
 
-        # Cleanup
-        if 'tmp' in self.tmpfile:
-            rmtree(self.tmpfile)
-
         # Make UVW column
-        if dp3_uvw: # Use DP3 for making UVW axis
-            self.dp3_uvw()
-        else: # Nearest neighbour interpolation for UVW
-            self.interpolate_uvw()
+        self.make_uvw(dysco_bitrate=dysco_bitrate) # Use DP3 for making UVW axis

@@ -38,7 +38,7 @@ def parse_args():
     parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM storage (slower but less RAM cost).')
     parser.add_argument('--chunk_factor', type=float, help='Factor to reduce chunk size if RAM issues', default=1.)
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template.')
-    parser.add_argument('--dp3_uvw', action='store_true', help='Use DP3 to recalculate UVW values, instead of interpolation (interpolation is probably more precise).')
+    parser.add_argument('--no_interpolation', action='store_true', help='Do not interpolate UVW (keep DP3 UVW).')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')
     parser.add_argument('--extra_cooldowns', action='store_true', help='Add extra 1-minute cooldown moments after intensive parallelisation (seems to help with high I/O jobs)')
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
@@ -90,14 +90,14 @@ def main():
 
     # Make template
     t = Template(args.msin, args.msout, tmp_folder=args.tmp, ncpu=cpucount)
-    t.make_template(overwrite=True, time_res=time_res, avg_factor=avg, dp3_uvw=args.dp3_uvw)
+    t.make_template(overwrite=True, time_res=time_res, avg_factor=avg, dysco_bitrate=args.dysco_bitrate)
     print("\n############\nTemplate creation completed\n############")
 
     # Stack MS
     if not args.make_only_template:
         start_time = time.time()
         s = Stack(args.msin, args.msout, tmp_folder=args.tmp, chunkmem=args.chunk_factor)
-        s.stack_all(interpolate_uvw=not args.dp3_uvw, safe_mem=args.safe_memory, extra_cooldowns=args.extra_cooldowns)
+        s.stack_all(interpolate_uvw=not args.no_interpolation, safe_mem=args.safe_memory, extra_cooldowns=args.extra_cooldowns)
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Elapsed time for stacking: {elapsed_time} seconds")
@@ -106,10 +106,6 @@ def main():
     if not args.keep_mapping:
         clean_mapping_files(args.msin)
     clean_binary_files(args.tmp)
-
-    # Apply dysco compression
-    if args.dysco_bitrate is not None:
-        compress(args.msout, args.dysco_bitrate)
 
 
 if __name__ == '__main__':
