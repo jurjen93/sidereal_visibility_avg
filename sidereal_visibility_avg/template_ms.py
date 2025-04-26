@@ -269,7 +269,7 @@ class Template:
         print('\nMake final UVW mapping to output dataset')
         msdir = '/'.join(self.mslist[0].split('/')[0:-1])
         process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW, tmpfolder=self.tmp_folder)
-        with ProcessPoolExecutor(max_workers=min(self.ncpu, 4)) as executor:
+        with ProcessPoolExecutor(max_workers=max(self.ncpu-2, 1)) as executor:
             future_to_baseline = {executor.submit(process_func, baseline): baseline for baseline in baselines}
 
             for n, future in enumerate(as_completed(future_to_baseline)):
@@ -396,4 +396,4 @@ class Template:
                     print(f"Error processing '{subtbl}': {e}")
 
         # Make UVW column
-        self.make_uvw(dysco_bitrate=dysco_bitrate) # Use DP3 for making UVW axis
+        self.make_uvw(dysco_bitrate=dysco_bitrate)

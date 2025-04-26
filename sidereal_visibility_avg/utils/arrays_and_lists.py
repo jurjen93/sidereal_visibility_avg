@@ -107,10 +107,10 @@ def find_closest_index_multi_array(a1, a2):
     tree = cKDTree(a2)
 
     # Query the tree for the closest points in a1
-    distances, indices = tree.query(a1, workers=-1)
+    distances, indices = tree.query(a1, workers=2)
 
     # Check for negated versions of a1, directly
-    neg_distances, neg_indices = tree.query(-a1, workers=-1)
+    neg_distances, neg_indices = tree.query(-a1, workers=2)
 
     # Combine the results from both queries
     final_indices = np.where(neg_distances < distances, neg_indices, indices)

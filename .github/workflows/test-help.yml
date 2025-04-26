@@ -11,23 +11,28 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Disable Microsoft Repo
+        run: |
+          sudo sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/microsoft-prod.list || true
+          sudo apt-get update
+
+      - name: Install Singularity
+        run: |
+          sudo apt-get install -y singularity-container
+
+      - name: Download flocs Singularity
+        run: singularity pull flocs.sif https://public.spider.surfsara.nl/project/lofarvwf/fsweijen/containers/flocs_ci.sif
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-
-      - name: Install Python dependencies
-        run: |
-          pip install -r requirements.txt
-
       - name: Run --help on main.py
-        run: python -m sidereal_visibility_avg.main --help
+        run: singularity exec --bind $(pwd):/repo flocs.sif python -m repo.sidereal_visibility_avg.main --help
 
       - name: Run testcase
-        run: python -m sidereal_visibility_avg.main .github/testdata/test?.ms
+        run: singularity exec --bind $(pwd):/repo flocs.sif python -m repo.sidereal_visibility_avg.main /repo/.github/testdata/test*.ms
 
       - name: Run testcase with chunk factor
-        run: python -m sidereal_visibility_avg.main --chunk_factor 2345.1 .github/testdata/test?.ms
+        run: singularity exec --bind $(pwd):/repo flocs.sif python -m repo.sidereal_visibility_avg.main --chunk_factor 2345.1 /repo/.github/testdata/test*.ms

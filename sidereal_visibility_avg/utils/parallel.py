@@ -289,28 +289,3 @@ def process_baseline_uvw(baseline, folder, UVW, tmpfolder):
     except Exception as exc:
         print(f'Baseline {baseline} generated an exception: {exc}')
 
-
-def process_baseline_int(baseline_indices, baselines, mslist, tmpfolder):
-    """Process baselines parallel executor"""
-
-    results = []
-    for b_idx in baseline_indices:
-        baseline = baselines[b_idx]
-        uvw = np.zeros((0, 3))
-        time = np.array([])
-        row_idxs = []
-        for ms_idx, ms in enumerate(sorted(mslist)):
-            mappingfolder = ms + '_baseline_mapping'
-            try:
-                mapjson = json.load(open(mappingfolder + '/' + '-'.join([str(a) for a in baseline]) + '.json'))
-            except FileNotFoundError:
-                continue
-
-            row_idxs += list(mapjson.values())
-            uvw = np.append(np.memmap(tmpfolder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
-                [int(i) for i in list(mapjson.keys())]], uvw, axis=0)
-
-            time = np.append(np.memmap(tmpfolder+f'{path.basename(ms)}_time.tmp.dat', dtype=np.float32)[[int(i) for i in list(mapjson.keys())]], time)
-
-        results.append((list(np.unique(np.abs(row_idxs))), uvw, baseline, time))
-    return results
