@@ -177,7 +177,7 @@ class Template:
     def make_mapping_lst(self):
         """
         Make mapping json files essential for efficient stacking.
-        These map LST times from input MS to template MS.
+        This step maps based on the LST time (since this is faster than multi-D-arrays).
         """
 
         outname = self.outname  # Cache instance variables locally
@@ -243,7 +243,7 @@ class Template:
 
     def make_mapping_uvw(self):
         """
-        Update mapping json files essential for efficient and accurate UVW averaging
+        Update UVW mapping with nearest neighbouring
         """
 
         # Get baselines
@@ -269,7 +269,7 @@ class Template:
         print('\nMake final UVW mapping to output dataset')
         msdir = '/'.join(self.mslist[0].split('/')[0:-1])
         process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW, tmpfolder=self.tmp_folder)
-        with ProcessPoolExecutor(max_workers=np.min(self.ncpu, 4)) as executor:
+        with ProcessPoolExecutor(max_workers=min(self.ncpu, 4)) as executor:
             future_to_baseline = {executor.submit(process_func, baseline): baseline for baseline in baselines}
 
             for n, future in enumerate(as_completed(future_to_baseline)):
