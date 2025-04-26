@@ -43,7 +43,6 @@ def parse_args():
     parser.add_argument('--tmp', type=str, help='Temporary storage folder.', default='.')
     parser.add_argument('--ncpu', type=int, help='Maximum number of cpus (default is maximum available)', default=None)
     parser.add_argument('--only_lst_mapping', action='store_true', help='Only LST UVW mapping (faster but perhaps less accurate)')
-
     return parser.parse_args()
 
 
