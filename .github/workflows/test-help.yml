@@ -23,16 +23,14 @@ jobs:
       - name: Download flocs Singularity
         run: singularity pull flocs.sif https://public.spider.surfsara.nl/project/lofarvwf/fsweijen/containers/flocs_ci.sif
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       - name: Run --help on main.py
-        run: singularity exec --bind $(pwd):/repo flocs.sif python -m repo.sidereal_visibility_avg.main --help
+        run: |
+          singularity exec --bind $(pwd):/repo flocs.sif bash -c "export PYTHONPATH=/repo:\$PYTHONPATH && python -m sidereal_visibility_avg.main --help"
 
       - name: Run testcase
-        run: singularity exec --bind $(pwd):/repo flocs.sif python -m repo.sidereal_visibility_avg.main /repo/.github/testdata/test*.ms
+        run: |
+          singularity exec --bind $(pwd):/repo flocs.sif bash -c "export PYTHONPATH=/repo:\$PYTHONPATH && python -m sidereal_visibility_avg.main /repo/.github/testdata/test*.ms"
 
       - name: Run testcase with chunk factor
-        run: singularity exec --bind $(pwd):/repo flocs.sif python -m repo.sidereal_visibility_avg.main --chunk_factor 2345.1 /repo/.github/testdata/test*.ms
+        run: |
+          singularity exec --bind $(pwd):/repo flocs.sif bash -c "export PYTHONPATH=/repo:\$PYTHONPATH && python -m sidereal_visibility_avg.main --chunk_factor 2345.1 /repo/.github/testdata/test*.ms"
