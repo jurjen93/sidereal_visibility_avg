@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument('--time_res', type=float, help='Desired time resolution in seconds.')
     parser.add_argument('--resolution', type=float, help='Desired spatial resolution (if given, you also have to give --fov_diam).')
     parser.add_argument('--fov_diam', type=float, help='Desired field of view diameter in degrees. This is used to calculate the optimal time resolution.')
-    parser.add_argument('--dysco_bitrate', type=float, help='Dysco compression data bitrate.')
+    parser.add_argument('--dysco_bitrate', type=int, help='Dysco compression data bitrate.', default=None)
     parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM storage (slower but less RAM cost).')
     parser.add_argument('--chunk_factor', type=float, help='Factor to reduce chunk size if RAM issues', default=1.)
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template.')

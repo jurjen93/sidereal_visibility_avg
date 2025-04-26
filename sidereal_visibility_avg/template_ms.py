@@ -9,7 +9,7 @@ import gc
 from functools import partial
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw
-from .utils.dysco import is_dysco_compressed
+from .utils.dysco import is_dysco_compressed, decompress
 from .utils.arrays_and_lists import repeat_elements, map_array_dict, find_closest_index_list
 from .utils.file_handling import check_folder_exists
 from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
@@ -228,7 +228,7 @@ class Template:
         Calculate UVW with DP3
         """
 
-        # Use DP3 to upsample and downsample, recalculating the UVW coordinates
+        # # Use DP3 to upsample and downsample, recalculating the UVW coordinates
         cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] up.type=upsample up.timestep=2 up.updateuvw=True"
         if dysco_bitrate is not None:
             cmd+=f" msout.storagemanager='dysco' msout.storagemanager.databitrate={dysco_bitrate}"
@@ -358,8 +358,10 @@ class Template:
             # If Dysco compressed
             if is_dysco_compressed(tmp_ms):
                 newdesc_data['DATA']['dataManagerType'] = 'TiledColumnStMan'
-                newdesc_data['WEIGHT_SPECTRUM']['dataManagerType'] = 'TiledColumnStMan'
                 newdesc_data['DATA']['dataManagerGroup'] = 'TiledData'
+                newdesc_data['UVW']['dataManagerTYpe'] = 'TiledColumnStman'
+                newdesc_data['UVW']['dataManagerGroup'] = 'TiledUVW'
+                newdesc_data['WEIGHT_SPECTRUM']['dataManagerType'] = 'TiledColumnStMan'
                 newdesc_data['WEIGHT_SPECTRUM']['dataManagerGroup'] = 'TiledWeightSpectrum'
 
             newdesc_data.pop('_keywords_')
