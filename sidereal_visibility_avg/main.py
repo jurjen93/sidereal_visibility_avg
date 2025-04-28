@@ -104,7 +104,7 @@ def main():
 
     # Clean up mapping files
     if not args.keep_mapping:
-        clean_mapping_files(args.msin, tmp_folder)
+        clean_mapping_files(args.msin, args.tmp)
     clean_binary_files(args.tmp)
 
 
