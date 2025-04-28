@@ -1,15 +1,20 @@
 import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from glob import glob
-from multiprocessing import cpu_count
 from os import path
 import gc
 
 import numpy as np
-from numba import njit, prange
+from numba import njit, prange, get_num_threads
 
 from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
+
+# Settings
+n_threads = get_num_threads()
+target_chunks_per_thread = 8
+min_chunk = 1024
+max_chunk = 65536
 
 
 @njit(parallel=True)
@@ -19,7 +24,7 @@ def replace_nan(arr):
     return arr
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def multiply_flat_arrays_numba(A_flat, B_flat, out_flat):
     """
     Numba kernel that multiplies two flattened arrays into a flattened output.
@@ -31,73 +36,62 @@ def multiply_flat_arrays_numba(A_flat, B_flat, out_flat):
 def multiply_arrays(A, B):
     """
     Multiplies two NumPy arrays of the same shape elementwise.
-    Uses Numba with parallel=True on flattened data for high efficiency.
-
-    Parameters
-    ----------
-    A, B : np.ndarray
-        Arrays of the same shape and compatible dtypes.
-
-    Returns
-    -------
-    out : np.ndarray
-        The elementwise product of A and B.
     """
 
-    # Ensure A and B have the same shape
     assert A.shape == B.shape, "Arrays must have the same shape"
 
-    # Allocate an output array (same shape and dtype as A)
     out = np.empty_like(A)
-
-    # Get flattened (ravel) views of A, B, and out
-    if isinstance(A, np.memmap):
-        A_flat = np.array(A).ravel()
-    else:
-        A_flat = A.ravel()
-    B_flat = B.ravel()
-    out_flat = out.ravel()
-
-    # Call the parallel Numba kernel on the flattened data
-    multiply_flat_arrays_numba(A_flat, B_flat, out_flat)
+    multiply_flat_arrays_numba(A.ravel(), B.ravel(), out.ravel())
 
     return out
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def sum_flat_arrays_numba(A_flat, B_flat, out_flat):
-    """
-    Numba kernel that sums two flattened arrays into a flattened output.
-    A_flat, B_flat, out_flat must all be 1D and of the same size.
-    """
-    for i in prange(A_flat.size):
-        out_flat[i] = A_flat[i] + B_flat[i]
+    n = A_flat.size
+
+    chunk_size = max(min_chunk, min(max_chunk, (n + n_threads * target_chunks_per_thread - 1) // (n_threads * target_chunks_per_thread)))
+
+    # Parallel over chunks
+    n_chunks = (n + chunk_size - 1) // chunk_size
+
+    for chunk_id in prange(n_chunks):
+        chunk_start = chunk_id * chunk_size
+        chunk_end = min(chunk_start + chunk_size, n)
+
+        for i in range(chunk_start, chunk_end):
+            out_flat[i] = A_flat[i] + B_flat[i]
 
 
 def sum_arrays(A, B):
     """
     Sums two NumPy arrays elementwise.
-    Supports broadcasting when needed.
-    Uses Numba with parallel=True on flattened data.
     """
-    # Make sure they have the same shape
+
     assert A.shape == B.shape, "Arrays must have the same shape"
 
-    # Allocate output array (same shape, dtype as A)
     out = np.empty_like(A)
-
-    # Flatten (ravel) the arrays to 1D
-    if isinstance(A, np.memmap):
-        A_flat = np.array(A).ravel()
-    else:
-        A_flat = A.ravel()
-    B_flat = B.ravel()
-    out_flat = out.ravel()
-
-    # Call the parallel Numba kernel on the flattened data
-    sum_flat_arrays_numba(A_flat, B_flat, out_flat)
+    sum_flat_arrays_numba(A.ravel(), B.ravel(), out.ravel())
 
     return out
+
+
+@njit(parallel=True)
+def inplace_sum_time(A, row_idxs_new, B):
+    n_cols = B.size
+    for i in prange(row_idxs_new.size):
+        row_new = row_idxs_new[i]
+        for j in range(n_cols):
+            A[row_new, j] += B[j]
+
+
+@njit(parallel=True)
+def inplace_sum_timefreq(A, row_idxs_new, freq_idxs, B, row_idxs):
+    for i in prange(row_idxs_new.size):
+        row_new = row_idxs_new[i]
+        row_old = row_idxs[i]
+        for j in range(freq_idxs.size):
+            A[row_new, freq_idxs[j]] += B[row_old, j]
 
 
 @njit
@@ -209,14 +203,13 @@ def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
     return mapping_batch
 
 
-def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder):
+def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder, cpucount):
     """
     Parallel processing of mapping with unique antenna pairs using ProcessPoolExecutor.
     Writes the mappings directly after each batch is processed.
     """
 
     # Determine optimal batch size
-    cpucount = min(max(cpu_count() - 1, 1), 64)
     batch_size = max(len(uniq_ant_pairs) // cpucount, 1)  # Split tasks across all cores
     n_jobs = cpucount
 
@@ -259,7 +252,7 @@ def process_ms(ms):
     return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
 
 
-def process_baseline_uvw(baseline, folder, UVW):
+def process_baseline_uvw(baseline, folder, UVW, tmpfolder):
     """Parallel processing of one baseline"""
 
     try:
@@ -273,53 +266,51 @@ def process_baseline_uvw(baseline, folder, UVW):
         # Load all mappings and collect idxs_ref
         idxs_ref = set()
         mappings = []
-        for path in mapping_files:
-            with open(path) as f:
+        for pathf in mapping_files:
+            with open(pathf) as f:
                 mapping = json.load(f)
-                mappings.append((path, mapping))
+                mappings.append((pathf, mapping))
                 idxs_ref.update(mapping.values())
 
         idxs_ref = np.unique(np.fromiter(idxs_ref, dtype=int))
         uvw_ref = UVW[np.abs(idxs_ref)]
 
         # Loop over mapping files with nearest neighbouring
-        for path, mapping in mappings:
+        for pathf, mapping in mappings:
             idxs = np.fromiter((int(i) for i in mapping.keys()), dtype=int)
-            ms_dir = '/'.join(path.split('/')[:-1]).replace("_baseline_mapping", "")
+            ms_dir = '/'.join(pathf.split('/')[:-1]).replace("_baseline_mapping", "")
             ms = glob(ms_dir)[0]
-            uvw_in = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
+            uvw_in = np.memmap(tmpfolder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape(-1, 3)[idxs]
             idxs_new = np.array(idxs_ref)[find_closest_index_multi_array(uvw_in[:, :2], uvw_ref[:, :2])]
             new_mapping = dict(zip(map(str, idxs), idxs_new.astype(int).tolist()))
-            with open(path, 'w') as f:
+            with open(pathf, 'w') as f:
                 json.dump(new_mapping, f)
 
     except Exception as exc:
         print(f'Baseline {baseline} generated an exception: {exc}')
 
 
-def process_baseline_int(baseline_indices, baselines, mslist):
+def process_baseline_int(baseline_indices, baselines, mslist, tmpfolder):
     """Process baselines parallel executor"""
 
     results = []
     for b_idx in baseline_indices:
         baseline = baselines[b_idx]
-        c = 0
         uvw = np.zeros((0, 3))
         time = np.array([])
         row_idxs = []
         for ms_idx, ms in enumerate(sorted(mslist)):
-            mappingfolder = ms + '_baseline_mapping'
+            mappingfolder = tmpfolder+path.basename(ms) + '_baseline_mapping'
             try:
                 mapjson = json.load(open(mappingfolder + '/' + '-'.join([str(a) for a in baseline]) + '.json'))
             except FileNotFoundError:
-                c += 1
                 continue
 
             row_idxs += list(mapjson.values())
-            uvw = np.append(np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
+            uvw = np.append(np.memmap(tmpfolder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32).reshape((-1, 3))[
                 [int(i) for i in list(mapjson.keys())]], uvw, axis=0)
 
-            time = np.append(np.memmap(f'{ms}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
+            time = np.append(np.memmap(tmpfolder+f'{path.basename(ms)}_time.tmp.dat', dtype=np.float64)[[int(i) for i in list(mapjson.keys())]], time)
 
         results.append((list(np.unique(np.abs(row_idxs))), uvw, baseline, time))
     return results
