@@ -5,13 +5,16 @@ from casacore.tables import table
 from os import path, remove
 
 
-def clean_mapping_files(msin):
+def clean_mapping_files(msin, tmp_folder='.'):
     """
     Clean-up mapping files
     """
 
+    if tmp_folder[-1] != '/':
+        tmp_folder += '/'
+
     for ms in msin:
-        rmtree(path.basename(ms) + '_baseline_mapping')
+        rmtree(tmp_folder+path.basename(ms) + '_baseline_mapping')
 
 def clean_binary_files(folder):
     """
