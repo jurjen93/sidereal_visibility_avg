@@ -103,18 +103,14 @@ def find_closest_index_multi_array(a1, a2):
         - A list of indices corresponding to the nearest neighbors in a2 for each point in a1.
     """
 
-    # Ensure inputs are numpy arrays
-    a1 = np.asarray(a1)
-    a2 = np.asarray(a2)
-
     # Build a KDTree for a2 only
     tree = cKDTree(a2)
 
     # Query the tree for the closest points in a1
-    distances, indices = tree.query(a1)
+    distances, indices = tree.query(a1, workers=1)
 
     # Check for negated versions of a1, directly
-    neg_distances, neg_indices = tree.query(-a1)
+    neg_distances, neg_indices = tree.query(-a1, workers=1)
 
     # Combine the results from both queries
     final_indices = np.where(neg_distances < distances, neg_indices, indices)
@@ -244,3 +240,19 @@ def squeeze_to_intlist(arr):
         return squeezed.tolist()
     else:
         return squeezed.tolist()
+
+
+def is_range(arr):
+    """
+    Check if list/array is range
+
+    Args:
+        arr: array
+
+    Returns: boolean
+    """
+    return (
+        np.issubdtype(arr.dtype, np.integer) and
+        arr.ndim == 1 and
+        np.all(np.diff(arr) == 1)
+    )

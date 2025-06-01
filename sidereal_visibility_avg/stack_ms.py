@@ -6,8 +6,9 @@ import psutil
 from glob import glob
 from scipy.ndimage import gaussian_filter1d
 import gc
+from time import sleep
 
-from .utils.arrays_and_lists import find_closest_index_list, add_axis
+from .utils.arrays_and_lists import find_closest_index_list, add_axis, is_range
 from .utils.file_handling import load_json, read_mapping
 from .utils.ms_info import make_ant_pairs, get_data_arrays
 from .utils.printing import print_progress_bar
@@ -35,10 +36,10 @@ class Stack:
         F.close()
 
         # Memory and chunk size
-        self.num_cpus = psutil.cpu_count(logical=True)
-        total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
-        total_memory /= chunkmem
-        self.chunk_size = min(int(total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize/16/self.freq_len), 1_000_000_000//self.freq_len)
+        # Set number of cores
+        self.total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
+        self.total_memory /= chunkmem
+        self.chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 8 / self.freq_len), 30_000_000 // self.freq_len)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
@@ -71,21 +72,21 @@ class Stack:
         self.T.putcol('UVW', uvw)
 
 
-    def stack_all(self, column: str = 'DATA', interpolate_uvw: bool = False, safe_mem: bool = False):
+    def stack_all(self, column: str = 'DATA', keep_DP3_uvw: bool = False, safe_mem: bool = False, extra_cooldowns: bool = False):
         """
         Stack all MS
 
         :param:
             - column: column name (currently only DATA)
-            - interpolate_uvw: interpolate uvw coordinates (nearest neightbour + weighted average)
+            - keep_DP3_uvw: keep DP3 UVW, no weighted average
             - safe_mem: limit RAM usage
         """
 
         if column == 'DATA':
-            if interpolate_uvw:
-                columns = ['UVW', column, 'WEIGHT_SPECTRUM']
-            else:
+            if keep_DP3_uvw:
                 columns = [column, 'WEIGHT_SPECTRUM']
+            else:
+                columns = ['UVW', column, 'WEIGHT_SPECTRUM']
         else:
             sys.exit("ERROR: Only column 'DATA' allowed (for now)")
 
@@ -95,10 +96,11 @@ class Stack:
             # Loop over columns
             for col in columns:
 
-                gc.collect()
-
+                # Arrays to fill
                 if col == 'UVW':
                     new_data, uvw_weights = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
+                    if keep_DP3_uvw:
+                        new_data = self.T.getcol("UVW")
                 elif col=='WEIGHT_SPECTRUM':
                     new_data, _ = get_data_arrays(col, self.T.nrows(), self.freq_len, always_memmap=safe_mem, tmp_folder=self.tmp_folder)
                 else:
@@ -122,7 +124,7 @@ class Stack:
                     print('Collect relevant frequencies')
 
                     # Make antenna mapping in parallel
-                    mapping_folder = self.tmp_folder + ms + '_baseline_mapping'
+                    mapping_folder = self.tmp_folder + path.basename(ms) + '_baseline_mapping'
 
                     print('Read baseline mapping')
                     indices, ref_indices = read_mapping(mapping_folder)
@@ -148,11 +150,24 @@ class Stack:
                         start = chunk_idx * self.chunk_size
                         end = start + self.chunk_size
 
+                        # Get indices
+                        row_idxs_new = ref_indices[start:end]
+                        row_idxs = np.array([int(i - start) for i in indices[start:end]])
+
                         data = t.getcol(col, startrow=start, nrow=self.chunk_size)
+
+                        # Check if the row_idxs is a proper range
+                        if not is_range(row_idxs):
+                            data = data[row_idxs, :]
+                            norange = True
+                        else:
+                            norange = False
 
                         # Take complex conjugate for inverted baselines
                         if comp_conj is not None:
                             comp_conj_mask = comp_conj[start:end]
+                            if norange:
+                                comp_conj_mask = comp_conj_mask[row_idxs]
                             if np.any(comp_conj_mask):
                                 np.conjugate(data[comp_conj_mask], out=data[comp_conj_mask])
 
@@ -162,6 +177,8 @@ class Stack:
 
                             # Multiply with weight_spectrum for weighted average
                             weights = t.getcol('WEIGHT_SPECTRUM', startrow=start, nrow=self.chunk_size)
+                            if norange:
+                                weights = weights[row_idxs, :]
                             data = multiply_arrays(data, weights)
                             del weights
 
@@ -169,54 +186,51 @@ class Stack:
                         elif col=='WEIGHT_SPECTRUM':
                             data = data[..., 0]
 
-                        # Get indices
-                        row_idxs_new = ref_indices[start: start + self.chunk_size]
-                        row_idxs = (indices[start: start + self.chunk_size] - start).astype(np.intp)
-
                         if col == 'UVW':
 
                             weights = t.getcol("WEIGHT_SPECTRUM", startrow=start, nrow=self.chunk_size)[..., 0]
-                            weights = add_axis(np.nanmean(weights[row_idxs, :], axis=1), 3)
+                            if norange:
+                                weights = weights[row_idxs, :]
+                            weights = add_axis(np.nanmean(weights, axis=1), 3)
 
                             # Stacking
-                            subd = data[row_idxs, :]
-                            subdata = multiply_arrays(subd, weights)
-                            if self.num_cpus > 1: # method 1
-                                subdata_new = new_data[row_idxs_new, :]
-                                result = sum_arrays(subdata_new, subdata)
-                                new_data[row_idxs_new, :] = result
-                                result = sum_arrays(uvw_weights[row_idxs_new, :], weights)
-                                uvw_weights[row_idxs_new, :] = result
-                                del subdata_new
-                            else: # method 2
-                                np.add.at(new_data, row_idxs_new, subdata)
-                                np.add.at(uvw_weights, row_idxs_new, weights)
-                            del subdata
-                            del weights
+                            uvw_weights[row_idxs_new, :] = sum_arrays(uvw_weights[row_idxs_new, :], weights)
+                            subdata = multiply_arrays(data, weights)
+                            if isinstance(new_data, np.memmap):
+                                buffer = new_data[row_idxs_new, :].copy()
+                                new_data[row_idxs_new, :] = sum_arrays(buffer, subdata)
+                            else:
+                                new_data[row_idxs_new, :] = sum_arrays(new_data[row_idxs_new, :], subdata)
+
+                            # cleanup
+                            subdata = None
+                            weights = None
 
                             try:
                                 uvw_weights.flush()
                             except AttributeError:
                                 pass
 
+
+
                         else:
                             # Stacking
-                            idx_mask = np.ix_(row_idxs_new, freq_idxs)
-                            if self.num_cpus > 1: # method 1
-                                subdata_new = new_data[np.ix_(row_idxs_new, freq_idxs)]
-                                subdata = data[row_idxs, :]
-                                new_data[idx_mask] = sum_arrays(subdata_new, subdata)
-                                del subdata
-                                del subdata_new
-                            else: # method 2
-                                np.add.at(new_data, idx_mask, data[row_idxs, :])
+                            if isinstance(new_data, np.memmap):
+                                buffer = new_data[row_idxs_new[:, None], freq_idxs].copy()
+                                new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(buffer, data)
+                            else:
+                                new_data[row_idxs_new[:, None], freq_idxs] = sum_arrays(new_data[row_idxs_new[:, None],
+                                                                                        freq_idxs], data)
 
-                        # Cleanup
-                        del data
-                        gc.collect()
+                        # cleanup
+                        data = None
+                        buffer = None
 
                     try:
+                        gc.collect()
                         new_data.flush()
+                        if extra_cooldowns:
+                            sleep(60)
                     except AttributeError:
                         pass
 
@@ -229,17 +243,21 @@ class Stack:
                     new_data /= uvw_weights
                     new_data[new_data != new_data] = 0.
 
-                elif col == 'WEIGHT_SPECTRUM':
-                    new_data = add_axis(new_data, 4)
-
-                elif col == 'DATA':
-                    new_data[new_data==0] = np.nan
-
-                for chunk_idx in range(self.T.nrows() // self.chunk_size + 1):
-                    print_progress_bar(chunk_idx, chunks)
+                chunks = range(self.T.nrows() // self.chunk_size + 1)
+                for chunk_idx in chunks:
+                    print_progress_bar(chunk_idx, len(chunks))
                     startp = chunk_idx * self.chunk_size
-                    endp = min(start + self.chunk_size, self.T.nrows())  # Ensure we don't overrun the total rows
-                    self.T.putcol(col, new_data[start:end], startrow=startp, nrow=endp - startp)
+                    endp = min(startp + self.chunk_size, self.T.nrows())
+
+                    # Get chunk
+                    subdat = new_data[startp:endp]
+
+                    if col == 'WEIGHT_SPECTRUM':
+                        subdat = add_axis(subdat, 4)
+                    elif col == 'DATA':
+                        subdat[subdat == 0] = np.nan
+
+                    self.T.putcol(col, subdat, startrow=startp, nrow=endp - startp)
 
                 # clean up
                 del new_data

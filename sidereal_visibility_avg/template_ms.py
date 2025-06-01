@@ -1,6 +1,6 @@
 from casacore.tables import table, default_ms, taql
 import numpy as np
-from os import path, makedirs, cpu_count
+from os import path, makedirs, cpu_count, environ
 from os import system as run_command
 import sys
 from shutil import rmtree
@@ -9,13 +9,13 @@ import gc
 from functools import partial
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
-from .utils.dysco import decompress
+from .utils.dysco import is_dysco_compressed, compress
 from .utils.arrays_and_lists import repeat_elements, map_array_dict, find_closest_index_list
 from .utils.file_handling import check_folder_exists
 from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
-from .utils.uvw import resample_uwv
 from .utils.lst import mjd_seconds_to_lst_seconds, mjd_seconds_to_lst_seconds_single
 from .utils.printing import print_progress_bar
+from .utils.uvw import resample_uwv
 
 
 class Template:
@@ -25,9 +25,10 @@ class Template:
         - msin: List of input MS
         - outname: Output name for MS
         - tmp_folder: Directory to store temporary files (mapping, .dat files etc.), such as a local scratch or RAM disk
+        - ncpu: Number of cpus
     """
 
-    def __init__(self, msin: list = None, outname: str = 'sva_output.ms', tmp_folder: str = '.'):
+    def __init__(self, msin: list = None, outname: str = 'sva_output.ms', tmp_folder: str = '.', ncpu: int = None):
         if type(msin)!=list:
             sys.exit("ERROR: input needs to be a list of MS.")
         self.mslist = msin
@@ -38,6 +39,11 @@ class Template:
         self.tmp_folder = tmp_folder
         if self.tmp_folder[-1]!='/':
             self.tmp_folder+='/'
+
+        if ncpu is None:
+            self.ncpu = int(environ.get("SLURM_CPUS_ON_NODE", min(max(cpu_count() - 1, 1), 64)))
+        else:
+            self.ncpu = ncpu
 
     @property
     def time_lst_offset(self):
@@ -61,10 +67,10 @@ class Template:
         """
 
         for ms in self.mslist:
-            with taql(f'SELECT ROWID() as row_id FROM {ms}::ANTENNA WHERE NAME="{station}"') as rows:
+            with taql(f'SELECT ROWID() as row_id FROM {path.abspath(ms)}::ANTENNA WHERE NAME="{station}"') as rows:
                 if len(rows) == 1:
                     id = rows[0]['row_id']
-                    with taql(f'SELECT ELEMENT_OFFSET FROM {ms}::LOFAR_ANTENNA_FIELD WHERE ANTENNA_ID={id}') as el:
+                    with taql(f'SELECT ELEMENT_OFFSET FROM {path.abspath(ms)}::LOFAR_ANTENNA_FIELD WHERE ANTENNA_ID={id}') as el:
                         return el.getcol("ELEMENT_OFFSET"), id, ms
         sys.exit(f"ERROR: No {station} in {self.mslist}?")
 
@@ -157,7 +163,7 @@ class Template:
                 _, ind, ms = self.get_element_offset(station)
 
                 # Using taql because the shapes for Dutch and International stations are not similar (cannot be opened in Python)
-                taql(f"INSERT INTO {self.outname}::LOFAR_ANTENNA_FIELD SELECT FROM {ms}::LOFAR_ANTENNA_FIELD b WHERE b.ANTENNA_ID={ind}")
+                taql(f"INSERT INTO {self.outname}::LOFAR_ANTENNA_FIELD SELECT FROM {path.abspath(ms)}::LOFAR_ANTENNA_FIELD b WHERE b.ANTENNA_ID={ind}")
             tnew_field.putcol("ANTENNA_ID", np.array(range(len(stations))))
 
         with table(self.ref_table.getkeyword('LOFAR_STATION'), ack=False) as tnew_ant_tmp:
@@ -172,7 +178,7 @@ class Template:
     def make_mapping_lst(self):
         """
         Make mapping json files essential for efficient stacking.
-        These map LST times from input MS to template MS.
+        This step maps based on the LST time (since this is faster than multi-D-arrays).
         """
 
         outname = self.outname  # Cache instance variables locally
@@ -194,7 +200,7 @@ class Template:
             with taql(f"SELECT TIME,ANTENNA1,ANTENNA2 FROM {path.abspath(ms)}") as t:
 
                 # Mapping folder for the current MS
-                mapping_folder = self.tmp_folder + ms + '_baseline_mapping'
+                mapping_folder = self.tmp_folder + path.basename(ms) + '_baseline_mapping'
 
                 if not check_folder_exists(mapping_folder):
                     makedirs(mapping_folder, exist_ok=False)
@@ -214,33 +220,40 @@ class Template:
                     antennas = np.sort(antennas, axis=1)
 
                     # Run parallel mapping
-                    run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder)
+                    run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapping_folder, self.ncpu)
                 else:
                     print(f'{mapping_folder} already exists')
 
-    def calculate_uvw(self):
+    def make_uvw(self, dysco_bitrate: int = None, only_lst_mapping: bool = False, DP3_uvw: bool = False):
         """
-        Calculate UVW with DP3
+        Calculate UVW with DP3 (this step also compresses data)
         """
 
-        # Make baseline/time mapping
+        # # Use DP3 to calculate UVW coordinates
+        if not only_lst_mapping and DP3_uvw:
+            cmd = f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up] up.type=upsample up.timestep=2 up.updateuvw=True"
+            if dysco_bitrate is not None:
+                cmd+=f" msout.storagemanager='dysco' msout.storagemanager.databitrate={dysco_bitrate}"
+            cmd += f" && rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}"
+            run_command(cmd)
+        elif dysco_bitrate is not None:
+            compress(self.outname, dysco_bitrate)
+
+        # Make LST baseline/time mapping
         self.make_mapping_lst()
 
-        # Use DP3 to upsample and downsample, recalculating the UVW coordinates
-        run_command(f"DP3 msin={self.outname} msout={self.outname}.tmp steps=[up,avg] "
-                    f"up.type=upsample up.timestep=2 up.updateuvw=True avg.type=averager avg.timestep=2 "
-                    f"&& rm -rf {self.outname} && mv {self.outname}.tmp {self.outname}")
+        # Nearest neighbouring interpolation of UVW
+        if not DP3_uvw and not only_lst_mapping:
+            self.nearest_interpol_uvw()
 
         # Update baseline mapping
-        self.make_mapping_uvw()
+        if not only_lst_mapping:
+            self.make_mapping_uvw()
 
-    def interpolate_uvw(self):
+    def nearest_interpol_uvw(self):
         """
-        Fill UVW data points through interpolation
+        Nearest neighbour interpolation (alternative UVW)
         """
-
-        # Make baseline/time mapping
-        self.make_mapping_lst()
 
         # Get baselines
         with table(self.outname + "::ANTENNA", ack=False) as ants:
@@ -254,8 +267,8 @@ class Template:
 
             for ms_idx, ms in enumerate(sorted(self.mslist)):
                 with table(ms, ack=False) as f:
-                    uvw = np.memmap(self.tmp_folder+f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
-                    time = np.memmap(self.tmp_folder+f'{ms}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
+                    uvw = np.memmap(self.tmp_folder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                    time = np.memmap(self.tmp_folder+f'{path.basename(ms)}_time.tmp.dat', dtype=np.float64, mode='w+', shape=(f.nrows()))
 
                     uvw[:] = f.getcol("UVW")
                     time[:] = mjd_seconds_to_lst_seconds(f.getcol("TIME")) + self.time_lst_offset
@@ -264,33 +277,28 @@ class Template:
             num_workers = min(max(cpu_count()-1, 1), 64)
 
             batch_size = max(1, len(baselines) // num_workers)  # Ensure at least one baseline per batch
-
-            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            with ProcessPoolExecutor(max_workers=self.ncpu) as executor:
                 future_to_baseline = {
                     executor.submit(process_baseline_int, range(i, min(i + batch_size, len(baselines))), baselines,
-                                    self.mslist): i
+                                    self.mslist, self.tmp_folder): i
                     for i in range(0, len(baselines), batch_size)
                 }
 
                 for future in as_completed(future_to_baseline):
-                    try:
-                        results = future.result()
-                        for row_idxs, uvws, baseline, time in results:
+                    results = future.result()
+                    for row_idxs, uvws, baseline, time in results:
+                        if len(time)>0:
                             UVW[row_idxs] = resample_uwv(uvws, row_idxs, time, TIME)
-                    except Exception:
-                        print(f"No data for baseline {baseline}")
-
+                        else:
+                            print(f"No data for baseline {baseline}.")
             UVW.flush()
             T.putcol("UVW", UVW)
 
         gc.collect()
 
-        # Make final mapping
-        self.make_mapping_uvw()
-
     def make_mapping_uvw(self):
         """
-        Update mapping json files essential for efficient and accurate UVW averaging
+        Update UVW mapping
         """
 
         # Get baselines
@@ -306,7 +314,7 @@ class Template:
 
                 for ms_idx, ms in enumerate(sorted(self.mslist)):
                     with table(ms, ack=False) as f:
-                        uvw = np.memmap(f'{ms}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
+                        uvw = np.memmap(self.tmp_folder+f'{path.basename(ms)}_uvw.tmp.dat', dtype=np.float32, mode='w+', shape=(f.nrows(), 3))
                         uvw[:] = f.getcol("UVW")
 
         else:
@@ -314,10 +322,9 @@ class Template:
 
         # Refine UVW mapping from baseline input to baseline output
         print('\nMake final UVW mapping to output dataset')
-        num_workers = min(min(cpu_count()-1, len(baselines)), 64)
         msdir = '/'.join(self.mslist[0].split('/')[0:-1])
-        process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW)
-        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        process_func = partial(process_baseline_uvw, folder=msdir, UVW=UVW, tmpfolder=self.tmp_folder)
+        with ProcessPoolExecutor(max_workers=self.ncpu) as executor:
             future_to_baseline = {executor.submit(process_func, baseline): baseline for baseline in baselines}
 
             for n, future in enumerate(as_completed(future_to_baseline)):
@@ -331,7 +338,8 @@ class Template:
 
         gc.collect()
 
-    def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1):
+    def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1, dysco_bitrate: int = None,
+                      only_lst_mapping: bool = False, DP3_uvw: bool = False):
         """
         Make template MS based on existing MS
 
@@ -339,6 +347,9 @@ class Template:
             - overwrite: overwrite output file
             - time_res: time resolution in seconds
             - avg_factor: averaging factor
+            - dysco_bitrate: Dysco compression bit rate
+            - only_lst_mapping: Only LST mapping
+            - DP3_uvw: Use DP3 to calculate uvw
         """
 
         if overwrite:
@@ -379,10 +390,13 @@ class Template:
 
         # Make time axis for output MS
         if time_res is not None:
+            if DP3_uvw:
+                time_res*=2 # Because DP3 will upsample
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, time_res)
-
         else:
+            if DP3_uvw:
+                avg_factor/=2 # Because DP3 will upsample
             time_range = np.arange(min_t_lst + self.time_lst_offset,
                                    max_t_lst + self.time_lst_offset, min_dt/avg_factor)
 
@@ -392,10 +406,7 @@ class Template:
         # Take one ms for temp usage (to remove dysco, and modify)
         tmp_ms = self.mslist[0]
 
-        # Remove dysco compression (otherwise running into tricky errors when modifying MS)
-        self.tmpfile = decompress(tmp_ms)
-
-        with table(self.tmpfile, ack=False) as self.ref_table:
+        with table(tmp_ms, ack=False) as self.ref_table:
 
             # Data description
             newdesc_data = self.ref_table.getdesc()
@@ -403,6 +414,15 @@ class Template:
             # Reshape
             for col in ['DATA', 'FLAG', 'WEIGHT_SPECTRUM']:
                 newdesc_data[col]['shape'] = np.array([self.chan_num, 4])
+
+            # If Dysco compressed
+            if is_dysco_compressed(tmp_ms):
+                newdesc_data['DATA']['dataManagerType'] = 'TiledColumnStMan'
+                newdesc_data['DATA']['dataManagerGroup'] = 'TiledData'
+                newdesc_data['UVW']['dataManagerTYpe'] = 'TiledColumnStman'
+                newdesc_data['UVW']['dataManagerGroup'] = 'TiledUVW'
+                newdesc_data['WEIGHT_SPECTRUM']['dataManagerType'] = 'TiledColumnStMan'
+                newdesc_data['WEIGHT_SPECTRUM']['dataManagerGroup'] = 'TiledWeightSpectrum'
 
             newdesc_data.pop('_keywords_')
 
@@ -431,12 +451,11 @@ class Template:
                            'LOFAR_ELEMENT_FAILURE', 'OBSERVATION', 'POINTING',
                            'POLARIZATION', 'PROCESSOR', 'STATE']:
                 try:
-                    with table(self.tmpfile+"::"+subtbl, ack=False, readonly=False) as tsub:
+                    with table(tmp_ms+"::"+subtbl, ack=False, readonly=False) as tsub:
                         tsub.copy(self.outname + '/' + subtbl, deep=True)
                         tsub.flush(True)
                 except Exception as e:
                     print(f"Error processing '{subtbl}': {e}")
 
-        # Cleanup
-        if 'tmp' in self.tmpfile:
-            rmtree(self.tmpfile)
+        # Make UVW column
+        self.make_uvw(dysco_bitrate=dysco_bitrate, only_lst_mapping=only_lst_mapping, DP3_uvw=DP3_uvw)
