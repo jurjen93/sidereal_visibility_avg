@@ -211,8 +211,6 @@ class Stack:
                             except AttributeError:
                                 pass
 
-
-
                         else:
                             # Stacking
                             if isinstance(new_data, np.memmap):

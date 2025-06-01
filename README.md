@@ -9,10 +9,10 @@ Basic example:
 ```sva --msout <MS_OUTPUT_NAME> *.ms```
 
 What the code does:
-1) Make a MeasurementSet template, which includes includes all baselines, frequency, and new time resolution covering all input MS in Local Sidereal Time (LST).
+1) Make a MeasurementSet template based on all input MS in Local Sidereal Time (LST).
 
 2) Map baselines from input MS to output MS.
-    This step makes *baseline_mapping folders with the baseline mappings in json files.
+    This step makes *baseline_mapping directories with the baseline mappings in json files.
 
 3) Interpolate new UVW data with nearest neighbours (or optionally with DP3).
 
