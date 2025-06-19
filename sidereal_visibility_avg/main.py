@@ -10,9 +10,16 @@ from multiprocessing import cpu_count
 from numba import set_num_threads
 from os import environ
 
-# Logging
+# First, extract --logfile early
+def get_logfile_name():
+    for i, arg in enumerate(sys.argv):
+        if arg == '--logfile' and i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
+    return "sva_log.txt"
+
+# Setup logging
 from .utils.logger import SVALogger
-sys.stdout = SVALogger("sva_log.txt")
+sys.stdout = SVALogger(get_logfile_name())
 sys.stderr = sys.stdout
 
 from .utils.clean import clean_binary_files, clean_mapping_files
@@ -43,6 +50,7 @@ def parse_args():
     parser.add_argument('--ncpu', type=int, help='Maximum number of cpus (default is maximum available).', default=None)
     parser.add_argument('--only_lst_mapping', action='store_true', help='Only LST UVW mapping (faster but less accurate).')
     parser.add_argument('--dp3_uvw', action='store_true', help='Make UVW coordinates with DP3 (typically less accurate).')
+    parser.add_argument('--logfile', type=str, default='sva_log.txt', help='Path to the log file.')
 
     return parser.parse_args()
 
