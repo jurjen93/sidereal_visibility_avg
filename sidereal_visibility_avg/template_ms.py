@@ -9,7 +9,7 @@ import gc
 from functools import partial
 
 from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
-from .utils.dysco import is_dysco_compressed, compress
+from .utils.dysco import compress
 from .utils.arrays_and_lists import repeat_elements, map_array_dict, find_closest_index_list
 from .utils.file_handling import check_folder_exists
 from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
@@ -415,14 +415,17 @@ class Template:
             for col in ['DATA', 'FLAG', 'WEIGHT_SPECTRUM']:
                 newdesc_data[col]['shape'] = np.array([self.chan_num, 4])
 
-            # If Dysco compressed
-            if is_dysco_compressed(tmp_ms):
-                newdesc_data['DATA']['dataManagerType'] = 'TiledColumnStMan'
-                newdesc_data['DATA']['dataManagerGroup'] = 'TiledData'
-                newdesc_data['UVW']['dataManagerTYpe'] = 'TiledColumnStman'
-                newdesc_data['UVW']['dataManagerGroup'] = 'TiledUVW'
-                newdesc_data['WEIGHT_SPECTRUM']['dataManagerType'] = 'TiledColumnStMan'
-                newdesc_data['WEIGHT_SPECTRUM']['dataManagerGroup'] = 'TiledWeightSpectrum'
+            # Defaults
+            newdesc_data['DATA']['dataManagerType'] = 'StandardStMan'
+            newdesc_data['DATA']['dataManagerGroup'] = 'StandardStMan'
+            newdesc_data['UVW']['dataManagerType'] = 'StandardStMan'
+            newdesc_data['UVW']['dataManagerGroup'] = 'StandardStMan'
+            newdesc_data['WEIGHT_SPECTRUM']['dataManagerType'] = 'StandardStMan'
+            newdesc_data['WEIGHT_SPECTRUM']['dataManagerGroup'] = 'StandardStMan'
+            newdesc_data['ANTENNA1']['dataManagerType'] = 'StandardStMan'
+            newdesc_data['ANTENNA1']['dataManagerGroup'] = 'StandardStMan'
+            newdesc_data['ANTENNA2']['dataManagerType'] = 'StandardStMan'
+            newdesc_data['ANTENNA2']['dataManagerGroup'] = 'StandardStMan'
 
             newdesc_data.pop('_keywords_')
 
