@@ -25,6 +25,7 @@ sys.stderr = sys.stdout
 from .utils.clean import clean_binary_files, clean_mapping_files
 from .utils.file_handling import check_folder_exists
 from .utils.smearing import time_resolution
+from .utils.history import insert_history, parse_input_args
 from .stack_ms import Stack
 from .template_ms import Template
 
@@ -114,6 +115,9 @@ def main():
     if not args.keep_mapping:
         clean_mapping_files(args.msin, args.tmp)
     clean_binary_files(args.tmp)
+
+    # Insert MS history from SVA
+    insert_history(args.msout, parse_input_args(args))
 
 
 if __name__ == '__main__':
