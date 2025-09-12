@@ -1,6 +1,6 @@
 # Sidereal visibility averaging
 
-This package allows you to average visibilities from interferometers for similar baseline coordinates, when combining multiple observations centered on the same pointing center. 
+This package allows you to average visibilities from interferometers for similar baseline coordinates, when combining multiple observations centered on the same pointing center. This reduces the total number of visibilities and therefore helps saving disk space and computational time during imaging. 
 The code is currently only written for LOFAR data but may be adjusted for other instruments as well.
 
 Install with ```pip install sidereal-visibility-avg```
