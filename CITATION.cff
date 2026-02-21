@@ -4,9 +4,14 @@ authors:
   - family-names: de Jong
     given-names: Jurjen
     orcid: https://orcid.org/0000-0001-6876-8719
-title: "sidereal_visibility_avg"
+title: "jurjen93/sidereal_visibility_avg"
 version: 2.0.0
 identifiers:
   - type: doi
     value: 10.1051/0004-6361/202452492
+doi: 10.1051/0004-6361/202452492
+license:
+- cc-by-4.0
 date-released: 2025-02-01
+type: software
+repository-code: https://github.com/jurjen93/sidereal_visibility_avg
