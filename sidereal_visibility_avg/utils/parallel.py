@@ -8,7 +8,6 @@ import numpy as np
 from numba import njit, prange, get_num_threads
 
 from .arrays_and_lists import find_closest_index_multi_array
-from .ms_info import get_ms_content
 
 # Settings
 n_threads = get_num_threads()
@@ -17,81 +16,33 @@ min_chunk = 1024
 max_chunk = 65536
 
 
-@njit(parallel=True)
-def replace_nan(arr):
-    for i in prange(arr.shape[0]):
-        arr[i][np.isnan(arr[i])] = 0.0
-    return arr
-
-
-@njit(parallel=True, fastmath=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def multiply_flat_arrays_numba(A_flat, B_flat, out_flat):
-    """
-    Numba kernel that multiplies two flattened arrays into a flattened output.
-    """
     for i in prange(A_flat.size):
         out_flat[i] = A_flat[i] * B_flat[i]
 
-
 def multiply_arrays(A, B):
-    """
-    Multiplies two NumPy arrays of the same shape elementwise.
-    """
-
     assert A.shape == B.shape, "Arrays must have the same shape"
+    A_flat = np.ascontiguousarray(A).ravel()
+    B_flat = np.ascontiguousarray(B).ravel()
+    out = np.empty(A_flat.size, dtype=A.dtype)
+    multiply_flat_arrays_numba(A_flat, B_flat, out)
+    return out.reshape(A.shape)
 
-    out = np.empty_like(A)
-    multiply_flat_arrays_numba(A.ravel(), B.ravel(), out.ravel())
 
-    return out
-
-
-@njit(parallel=True, fastmath=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def sum_flat_arrays_numba(A_flat, B_flat, out_flat):
     n = A_flat.size
-
-    chunk_size = max(min_chunk, min(max_chunk, (n + n_threads * target_chunks_per_thread - 1) // (n_threads * target_chunks_per_thread)))
-
-    # Parallel over chunks
-    n_chunks = (n + chunk_size - 1) // chunk_size
-
-    for chunk_id in prange(n_chunks):
-        chunk_start = chunk_id * chunk_size
-        chunk_end = min(chunk_start + chunk_size, n)
-
-        for i in range(chunk_start, chunk_end):
-            out_flat[i] = A_flat[i] + B_flat[i]
-
+    for i in prange(n):
+        out_flat[i] = A_flat[i] + B_flat[i]
 
 def sum_arrays(A, B):
-    """
-    Sums two NumPy arrays elementwise.
-    """
-
     assert A.shape == B.shape, "Arrays must have the same shape"
-
-    out = np.empty_like(A)
-    sum_flat_arrays_numba(A.ravel(), B.ravel(), out.ravel())
-
-    return out
-
-
-@njit(parallel=True)
-def inplace_sum_time(A, row_idxs_new, B):
-    n_cols = B.size
-    for i in prange(row_idxs_new.size):
-        row_new = row_idxs_new[i]
-        for j in range(n_cols):
-            A[row_new, j] += B[j]
-
-
-@njit(parallel=True)
-def inplace_sum_timefreq(A, row_idxs_new, freq_idxs, B, row_idxs):
-    for i in prange(row_idxs_new.size):
-        row_new = row_idxs_new[i]
-        row_old = row_idxs[i]
-        for j in range(freq_idxs.size):
-            A[row_new, freq_idxs[j]] += B[row_old, j]
+    A_flat = np.ascontiguousarray(A).ravel()
+    B_flat = np.ascontiguousarray(B).ravel()
+    out = np.empty(A_flat.size, dtype=A.dtype)
+    sum_flat_arrays_numba(A_flat, B_flat, out)
+    return out.reshape(A.shape)
 
 
 @njit
@@ -242,14 +193,6 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
         print(f"An error occurred while processing or writing mappings: {e}")
 
     gc.collect()
-
-
-def process_ms(ms):
-    """Process MS content in parallel (using separate processes)"""
-
-    mscontent = get_ms_content(ms)
-    stations, lofar_stations, channels, dfreq, total_time_seconds, dt, min_t, max_t = mscontent.values()
-    return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
 
 
 def process_baseline_uvw(baseline, folder, UVW, tmpfolder):
