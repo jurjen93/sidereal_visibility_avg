@@ -223,3 +223,11 @@ def get_data_arrays(column: str = 'DATA', nrows: int = None, freq_len: int = Non
         new_data = np.zeros(shape, dtype=dtp)
 
     return new_data, weights
+
+
+def process_ms(ms):
+    """Process MS content in parallel (using separate processes)"""
+
+    mscontent = get_ms_content(ms)
+    stations, lofar_stations, channels, dfreq, total_time_seconds, dt, min_t, max_t = mscontent.values()
+    return stations, lofar_stations, channels, dfreq, dt, min_t, max_t

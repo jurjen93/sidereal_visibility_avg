@@ -5,78 +5,63 @@ from os import path
 import gc
 
 import numpy as np
-from numba import njit, prange, get_num_threads
+from numba import njit, prange
 
 from .arrays_and_lists import find_closest_index_multi_array
 from .ms_info import get_ms_content
 
-# Settings
-n_threads = get_num_threads()
-target_chunks_per_thread = 8
-min_chunk = 1024
-max_chunk = 65536
 
+# ── Numba kernels ──
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def replace_nan(arr):
-    for i in prange(arr.shape[0]):
-        arr[i][np.isnan(arr[i])] = 0.0
+    """Replace NaNs with 0 in-place."""
+    n = arr.shape[0]
+    m = arr.shape[1]
+    for i in prange(n):
+        for j in range(m):
+            if np.isnan(arr[i, j]):
+                arr[i, j] = 0.0
     return arr
 
 
-@njit(parallel=True, fastmath=True)
-def multiply_flat_arrays_numba(A_flat, B_flat, out_flat):
-    """
-    Numba kernel that multiplies two flattened arrays into a flattened output.
-    """
+@njit(parallel=True, fastmath=True, cache=True)
+def multiply_arrays_numba(A_flat, B_flat, out_flat):
     for i in prange(A_flat.size):
         out_flat[i] = A_flat[i] * B_flat[i]
 
 
-def multiply_arrays(A, B):
-    """
-    Multiplies two NumPy arrays of the same shape elementwise.
-    """
-
+def multiply_arrays(A, B, out=None):
     assert A.shape == B.shape, "Arrays must have the same shape"
-
-    out = np.empty_like(A)
-    multiply_flat_arrays_numba(A.ravel(), B.ravel(), out.ravel())
-
+    if not A.flags['C_CONTIGUOUS']:
+        A = np.ascontiguousarray(A)
+    if not B.flags['C_CONTIGUOUS']:
+        B = np.ascontiguousarray(B)
+    if out is None:
+        out = np.empty_like(A)
+    multiply_arrays_numba(A.ravel(), B.ravel(), out.ravel())
     return out
 
 
-@njit(parallel=True, fastmath=True)
-def sum_flat_arrays_numba(A_flat, B_flat, out_flat):
-    n = A_flat.size
-
-    chunk_size = max(min_chunk, min(max_chunk, (n + n_threads * target_chunks_per_thread - 1) // (n_threads * target_chunks_per_thread)))
-
-    # Parallel over chunks
-    n_chunks = (n + chunk_size - 1) // chunk_size
-
-    for chunk_id in prange(n_chunks):
-        chunk_start = chunk_id * chunk_size
-        chunk_end = min(chunk_start + chunk_size, n)
-
-        for i in range(chunk_start, chunk_end):
-            out_flat[i] = A_flat[i] + B_flat[i]
+@njit(parallel=True, fastmath=True, cache=True)
+def sum_arrays_numba(A_flat, B_flat, out_flat):
+    for i in prange(A_flat.size):
+        out_flat[i] = A_flat[i] + B_flat[i]
 
 
-def sum_arrays(A, B):
-    """
-    Sums two NumPy arrays elementwise.
-    """
-
+def sum_arrays(A, B, out=None):
     assert A.shape == B.shape, "Arrays must have the same shape"
-
-    out = np.empty_like(A)
-    sum_flat_arrays_numba(A.ravel(), B.ravel(), out.ravel())
-
+    if not A.flags['C_CONTIGUOUS']:
+        A = np.ascontiguousarray(A)
+    if not B.flags['C_CONTIGUOUS']:
+        B = np.ascontiguousarray(B)
+    if out is None:
+        out = np.empty_like(A)
+    sum_arrays_numba(A.ravel(), B.ravel(), out.ravel())
     return out
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def inplace_sum_time(A, row_idxs_new, B):
     n_cols = B.size
     for i in prange(row_idxs_new.size):
@@ -85,7 +70,7 @@ def inplace_sum_time(A, row_idxs_new, B):
             A[row_new, j] += B[j]
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def inplace_sum_timefreq(A, row_idxs_new, freq_idxs, B, row_idxs):
     for i in prange(row_idxs_new.size):
         row_new = row_idxs_new[i]
@@ -94,34 +79,25 @@ def inplace_sum_timefreq(A, row_idxs_new, freq_idxs, B, row_idxs):
             A[row_new, freq_idxs[j]] += B[row_old, j]
 
 
-@njit
+# ── nanmean excluding zeros ──
+
+@njit(cache=True)
 def nanmean_excluding_zeros_flat(a):
-    """
-    Compute the mean of a 1D array over values that are neither NaN nor 0.
-    """
     s = 0.0
     count = 0
     for i in range(a.shape[0]):
         val = a[i]
-        # Skip if NaN or exactly 0
         if not np.isnan(val) and val != 0:
             s += val
             count += 1
-    if count == 0:
-        return np.nan
-    else:
-        return s / count
+    return np.nan if count == 0 else s / count
 
 
-@njit
+@njit(parallel=True, fastmath=True, cache=True)
 def nanmean_excluding_zeros_axis0(data):
-    """
-    Compute the mean along axis 0 for a 2D array 'data' where each column’s
-    mean is computed over values that are not NaN and not 0.
-    """
     n, m = data.shape
     out = np.empty(m, dtype=data.dtype)
-    for j in range(m):
+    for j in prange(m):          # parallelise over columns, not rows
         s = 0.0
         count = 0
         for i in range(n):
@@ -129,39 +105,73 @@ def nanmean_excluding_zeros_axis0(data):
             if not np.isnan(val) and val != 0:
                 s += val
                 count += 1
-        if count == 0:
-            out[j] = np.nan
-        else:
-            out[j] = s / count
+        out[j] = np.nan if count == 0 else s / count
     return out
 
 
 def nozeros_nanmean(a, axis=None):
-    """
-    Compute the mean of an array that are neither NaN nor 0.
-
-    If axis is None, returns a scalar.
-    If an axis is specified, the mean is computed along that axis.
-    This version uses Numba for very fast execution.
-    """
-    # Ensure array is contiguous
     a = np.ascontiguousarray(a)
-
     if axis is None:
-        a_flat = a.ravel()
-        return nanmean_excluding_zeros_flat(a_flat)
-    else:
-        # Move the target axis to the front so that we average along axis 0.
-        a_moved = np.moveaxis(a, axis, 0)
-        n = a_moved.shape[0]
-        # Reshape to 2D: shape (n, prod(other_dims))
-        m = a_moved.size // n
-        data_2d = a_moved.reshape(n, m)
-        # Compute mean along axis 0 for each "column"
-        out_flat = nanmean_excluding_zeros_axis0(data_2d)
-        # Reshape to original shape with the reduced axis removed.
-        out_shape = a.shape[:axis] + a.shape[axis + 1:]
-        return out_flat.reshape(out_shape)
+        return nanmean_excluding_zeros_flat(a.ravel())
+    a_moved = np.moveaxis(a, axis, 0)
+    n = a_moved.shape[0]
+    data_2d = np.ascontiguousarray(a_moved.reshape(n, a_moved.size // n))
+    out_flat = nanmean_excluding_zeros_axis0(data_2d)
+    return out_flat.reshape(a.shape[:axis] + a.shape[axis + 1:])
+
+
+# ── Extra Numba kernels needed by Stack class ───
+
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _set_nan_to_zero_complex(data):
+    for i in prange(data.size):
+        v = data[i]
+        if np.isnan(v.real) or np.isnan(v.imag):
+            data[i] = 0.0
+
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _conjugate_masked(data, mask):
+    for i in prange(mask.size):
+        if mask[i]:
+            data[i] = data[i].real - 1j * data[i].imag
+
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _nanmean_axis1(weights):
+    n, m = weights.shape
+    out = np.empty(n, dtype=weights.dtype)
+    for i in prange(n):
+        s = 0.0
+        count = 0
+        for j in range(m):
+            v = weights[i, j]
+            if not np.isnan(v):
+                s += v
+                count += 1
+        out[i] = s / count if count > 0 else np.nan
+    return out
+
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _scatter_add_2d(target, row_idxs, col_idxs, src):
+    n_rows = row_idxs.shape[0]
+    n_cols = col_idxs.shape[0]
+    for i in prange(n_rows):
+        r = row_idxs[i]
+        for j in range(n_cols):
+            target[r, col_idxs[j]] += src[i, j]
+
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _scatter_add_uvw(target, weights_target, row_idxs, src, w):
+    for i in prange(row_idxs.shape[0]):
+        r = row_idxs[i]
+        wi = w[i, 0]  # weight is broadcast over UVW cols
+        weights_target[r, 0] += wi
+        for j in range(3):
+            target[r, j] += src[i, j] * wi
 
 
 def process_antpair_batch(antpair_batch, antennas, ref_antennas, time_idxs):
@@ -242,14 +252,6 @@ def run_parallel_mapping(uniq_ant_pairs, antennas, ref_antennas, time_idxs, mapp
         print(f"An error occurred while processing or writing mappings: {e}")
 
     gc.collect()
-
-
-def process_ms(ms):
-    """Process MS content in parallel (using separate processes)"""
-
-    mscontent = get_ms_content(ms)
-    stations, lofar_stations, channels, dfreq, total_time_seconds, dt, min_t, max_t = mscontent.values()
-    return stations, lofar_stations, channels, dfreq, dt, min_t, max_t
 
 
 def process_baseline_uvw(baseline, folder, UVW, tmpfolder):

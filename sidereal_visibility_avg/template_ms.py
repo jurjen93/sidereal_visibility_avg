@@ -8,11 +8,11 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import gc
 from functools import partial
 
-from .utils.parallel import run_parallel_mapping, process_ms, process_baseline_uvw, process_baseline_int
+from .utils.parallel import run_parallel_mapping, process_baseline_uvw, process_baseline_int
 from .utils.dysco import compress
 from .utils.arrays_and_lists import repeat_elements, map_array_dict, find_closest_index_list
 from .utils.file_handling import check_folder_exists
-from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs
+from .utils.ms_info import get_station_id, same_phasedir, unique_station_list, n_baselines, make_ant_pairs, process_ms
 from .utils.lst import mjd_seconds_to_lst_seconds, mjd_seconds_to_lst_seconds_single
 from .utils.printing import print_progress_bar
 from .utils.uvw import resample_uwv
@@ -456,6 +456,7 @@ class Template:
                            'LOFAR_ELEMENT_FAILURE', 'OBSERVATION', 'POINTING',
                            'POLARIZATION', 'PROCESSOR', 'STATE']:
                 try:
+                    print(f'Adding {subtbl}...')
                     with table(tmp_ms+"::"+subtbl, ack=False, readonly=False) as tsub:
                         tsub.copy(self.outname + '/' + subtbl, deep=True)
                         tsub.flush(True)

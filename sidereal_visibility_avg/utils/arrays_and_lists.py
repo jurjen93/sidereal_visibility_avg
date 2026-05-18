@@ -3,7 +3,6 @@ import numpy as np
 from casacore.tables import table
 from scipy.spatial import cKDTree
 from math import ceil
-from sklearn.neighbors import NearestNeighbors
 
 
 def make_odd(i):
@@ -53,69 +52,39 @@ def repeat_elements(original_list, repeat_count):
     return np.array([element for element in original_list for _ in range(repeat_count)])
 
 
-def find_closest_index(arr, value):
-    """
-    Find the index of the closest value in the array to the given value.
-
-    :param:
-        - arr: numpy array.
-        - value: float value to find the closest value to.
-
-    :return:
-        - The index of the closest value in the array.
-    """
-
-    # Calculate the absolute difference with the given value
-    differences = np.abs(arr - value)
-    print(f"Minimal difference: {min(differences)}")
-
-    # Find the index of the minimum difference
-    closest_index = np.argmin(differences)
-
-    return closest_index
-
-
 def find_closest_index_list(a1, a2):
     """
-    Find the indices of the closest values between two arrays.
+    Find indices of closest values in sorted array a2 for each value in a1.
     """
+    a1 = np.asarray(a1)
+    a2 = np.asarray(a2)
 
-    a1, a2 = np.array(a1), np.array(a2)
+    idx = np.searchsorted(a2, a1)
+    idx = np.clip(idx, 1, len(a2) - 1)
 
-    # Create a nearest neighbors model (use 'ball_tree' or 'kd_tree' for small, 'brute' for large datasets)
-    nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(a2.reshape(-1, 1))
-
-    # Find the nearest neighbors for each element in a1
-    distances, indices = nbrs.kneighbors(a1.reshape(-1, 1))
-
-    return indices.flatten()
+    left_closer = np.abs(a1 - a2[idx - 1]) <= np.abs(a1 - a2[idx])
+    idx[left_closer] -= 1
+    return idx
 
 
 def find_closest_index_multi_array(a1, a2):
     """
-    Find the indices of the closest values.
-
-    :param:
-        - a1: first array (shape NxM)
-        - a2: second array (shape PxM)
-
-    :return:
-        - A list of indices corresponding to the nearest neighbors in a2 for each point in a1.
+    Find indices of closest rows in a2 for each row in a1, also checking
+    negated a1 (conjugate baseline convention).
     """
+    a1 = np.asarray(a1)
+    a2 = np.asarray(a2)
 
-    # Build a KDTree for a2 only
     tree = cKDTree(a2)
 
-    # Query the tree for the closest points in a1
-    distances, indices = tree.query(a1, workers=1)
+    both   = np.concatenate([a1, -a1], axis=0)
+    dists, idxs = tree.query(both, workers=-1)
 
-    # Check for negated versions of a1, directly
-    neg_distances, neg_indices = tree.query(-a1, workers=1)
+    n = len(a1)
+    d_pos, d_neg = dists[:n], dists[n:]
+    idx_pos, idx_neg = idxs[:n],  idxs[n:]
 
-    # Combine the results from both queries
-    final_indices = np.where(neg_distances < distances, neg_indices, indices)
-
-    return final_indices.tolist()
+    return np.where(d_neg < d_pos, idx_neg, idx_pos)
 
 
 def map_array_dict(arr, dct):
