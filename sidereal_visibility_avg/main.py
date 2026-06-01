@@ -100,9 +100,9 @@ def main():
         print(f"Additional time sampling factor {avg}\n")
 
     # Make template
-    t = Template(args.msin, args.msout, tmp_folder=args.tmp, ncpu=cpucount, skip_lofar_antenna_field=args.skip_lofar_antenna_field)
+    t = Template(args.msin, args.msout, tmp_folder=args.tmp, ncpu=cpucount)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg, dysco_bitrate=args.dysco_bitrate,
-                    only_lst_mapping=args.only_lst_mapping, DP3_uvw=args.dp3_uvw)
+                    only_lst_mapping=args.only_lst_mapping, DP3_uvw=args.dp3_uvw, skip_lofar_antenna_field=args.skip_lofar_antenna_field)
     print("\n############\nTemplate creation completed\n############")
 
     # Stack MS

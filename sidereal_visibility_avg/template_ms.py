@@ -28,7 +28,7 @@ class Template:
         - ncpu: Number of cpus
     """
 
-    def __init__(self, msin: list = None, outname: str = 'sva_output.ms', tmp_folder: str = '.', ncpu: int = None, skip_lofar_antenna_field: bool = False):
+    def __init__(self, msin: list = None, outname: str = 'sva_output.ms', tmp_folder: str = '.', ncpu: int = None):
         if type(msin)!=list:
             sys.exit("ERROR: input needs to be a list of MS.")
         self.mslist = msin
@@ -44,8 +44,6 @@ class Template:
             self.ncpu = int(environ.get("SLURM_CPUS_ON_NODE", min(max(cpu_count() - 1, 1), 64)))
         else:
             self.ncpu = ncpu
-
-        self.skip_lofar_antenna_field = skip_lofar_antenna_field
 
     @property
     def time_lst_offset(self):
@@ -102,7 +100,7 @@ class Template:
             tnew_spw.putcol("NAME", 'Stacked_MS_'+str(int(np.nanmean(self.channels)//1000000))+"MHz")
             tnew_spw.flush(True)
 
-    def add_stations_tables(self):
+    def add_stations_tables(self, skip_lofar_antenna_field: bool = False):
         """
         Add ANTENNA and FEED tables
         """
@@ -160,7 +158,7 @@ class Template:
         with table(self.ref_table.getkeyword('LOFAR_ANTENNA_FIELD'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
 
-        if not self.skip_lofar_antenna_field:
+        if not skip_lofar_antenna_field:
             with table(self.outname + '::LOFAR_ANTENNA_FIELD', newdesc, readonly=False, ack=False) as tnew_field:
                 for n, station in enumerate(stations):
                     _, ind, ms = self.get_element_offset(station)
@@ -344,7 +342,7 @@ class Template:
         gc.collect()
 
     def make_template(self, overwrite: bool = True, time_res: int = None, avg_factor: float = 1, dysco_bitrate: int = None,
-                      only_lst_mapping: bool = False, DP3_uvw: bool = False):
+                      only_lst_mapping: bool = False, DP3_uvw: bool = False, skip_lofar_antenna_field: bool = False):
         """
         Make template MS based on existing MS
 
@@ -355,6 +353,7 @@ class Template:
             - dysco_bitrate: Dysco compression bit rate
             - only_lst_mapping: Only LST mapping
             - DP3_uvw: Use DP3 to calculate uvw
+            - skip_lofar_antenna_field: Skip adding proper LOFAR_ANTENNA_FIELD
         """
 
         if overwrite:
@@ -452,7 +451,7 @@ class Template:
             self.add_spectral_window_table()
 
             # Add ANTENNA/STATION info
-            self.add_stations_tables()
+            self.add_stations_tables(skip_lofar_antenna_field)
 
             # Get other tables (annoying table locks prevent parallel processing)
             for subtbl in ['FIELD', 'HISTORY', 'FLAG_CMD', 'DATA_DESCRIPTION',
