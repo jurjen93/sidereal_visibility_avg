@@ -52,6 +52,8 @@ def parse_args():
     parser.add_argument('--only_lst_mapping', action='store_true', help='Only LST UVW mapping (faster but less accurate).')
     parser.add_argument('--dp3_uvw', action='store_true', help='Make UVW coordinates with DP3 (typically less accurate).')
     parser.add_argument('--logfile', type=str, default='sva_log.txt', help='Path to the log file.')
+    parser.add_argument('--skip_lofar_antenna_field', action='store_true', help='Skip putting LOFAR_ANTENNA_FIELD table in output SVA dataset. '
+                                                                                'This is for example needed when combining phased-up datasets that have outdated LOFAR_ANTENNA_FIELD tables.')
 
     return parser.parse_args()
 
@@ -98,7 +100,7 @@ def main():
         print(f"Additional time sampling factor {avg}\n")
 
     # Make template
-    t = Template(args.msin, args.msout, tmp_folder=args.tmp, ncpu=cpucount)
+    t = Template(args.msin, args.msout, tmp_folder=args.tmp, ncpu=cpucount, skip_lofar_antenna_field=args.skip_lofar_antenna_field)
     t.make_template(overwrite=True, time_res=time_res, avg_factor=avg, dysco_bitrate=args.dysco_bitrate,
                     only_lst_mapping=args.only_lst_mapping, DP3_uvw=args.dp3_uvw)
     print("\n############\nTemplate creation completed\n############")

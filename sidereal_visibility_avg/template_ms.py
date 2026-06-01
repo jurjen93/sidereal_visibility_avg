@@ -28,7 +28,7 @@ class Template:
         - ncpu: Number of cpus
     """
 
-    def __init__(self, msin: list = None, outname: str = 'sva_output.ms', tmp_folder: str = '.', ncpu: int = None):
+    def __init__(self, msin: list = None, outname: str = 'sva_output.ms', tmp_folder: str = '.', ncpu: int = None, skip_lofar_antenna_field: bool = False):
         if type(msin)!=list:
             sys.exit("ERROR: input needs to be a list of MS.")
         self.mslist = msin
@@ -44,6 +44,8 @@ class Template:
             self.ncpu = int(environ.get("SLURM_CPUS_ON_NODE", min(max(cpu_count() - 1, 1), 64)))
         else:
             self.ncpu = ncpu
+
+        self.skip_lofar_antenna_field = skip_lofar_antenna_field
 
     @property
     def time_lst_offset(self):
@@ -158,13 +160,14 @@ class Template:
         with table(self.ref_table.getkeyword('LOFAR_ANTENNA_FIELD'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
 
-        with table(self.outname + '::LOFAR_ANTENNA_FIELD', newdesc, readonly=False, ack=False) as tnew_field:
-            for n, station in enumerate(stations):
-                _, ind, ms = self.get_element_offset(station)
+        if not self.skip_lofar_antenna_field:
+            with table(self.outname + '::LOFAR_ANTENNA_FIELD', newdesc, readonly=False, ack=False) as tnew_field:
+                for n, station in enumerate(stations):
+                    _, ind, ms = self.get_element_offset(station)
 
-                # Using taql because the shapes for Dutch and International stations are not similar (cannot be opened in Python)
-                taql(f"INSERT INTO {self.outname}::LOFAR_ANTENNA_FIELD SELECT FROM {path.abspath(ms)}::LOFAR_ANTENNA_FIELD b WHERE b.ANTENNA_ID={ind}")
-            tnew_field.putcol("ANTENNA_ID", np.array(range(len(stations))))
+                    # Using taql because the shapes for Dutch and International stations are not similar (cannot be opened in Python)
+                    taql(f"INSERT INTO {self.outname}::LOFAR_ANTENNA_FIELD SELECT FROM {path.abspath(ms)}::LOFAR_ANTENNA_FIELD b WHERE b.ANTENNA_ID={ind}")
+                tnew_field.putcol("ANTENNA_ID", np.array(range(len(stations))))
 
         with table(self.ref_table.getkeyword('LOFAR_STATION'), ack=False) as tnew_ant_tmp:
             newdesc = tnew_ant_tmp.getdesc()
