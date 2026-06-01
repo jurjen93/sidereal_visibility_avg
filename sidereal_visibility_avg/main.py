@@ -42,8 +42,9 @@ def parse_args():
     parser.add_argument('--resolution', type=float, help='Desired spatial resolution (if given, you also have to give --fov_diam).')
     parser.add_argument('--fov_diam', type=float, help='Desired field of view diameter in degrees. This is used to calculate the optimal time resolution.')
     parser.add_argument('--dysco_bitrate', type=int, help='Dysco compression data bitrate.', default=None)
-    parser.add_argument('--safe_memory', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM storage (slower but less RAM cost).')
-    parser.add_argument('--chunk_factor', type=float, help='Factor to reduce chunk size if RAM issues', default=1.)
+    parser.add_argument('--always_memmap', action='store_true', help='Use always memmap for DATA and WEIGHT_SPECTRUM storage (slower but less RAM cost).')
+    parser.add_argument('--chunk_memory', type=float, help='Factor to reduce total available RAM, resulting in smaller chunks. For example required when running on a cluster '
+                                                           'where psutil.virtual_memory() returns RAM on entire node while running a job with just a few cores.', default=1.)
     parser.add_argument('--make_only_template', action='store_true', help='Stop after making empty template.')
     parser.add_argument('--keep_mapping', action='store_true', help='Do not remove mapping files (useful for debugging).')
     parser.add_argument('--extra_cooldowns', action='store_true', help='Add extra 1-minute cooldown moments after intensive parallelisation (seems to magically help with intensive I/O jobs...).')
@@ -108,8 +109,8 @@ def main():
     # Stack MS
     if not args.make_only_template:
         start_time = time()
-        s = Stack(args.msin, args.msout, tmp_folder=args.tmp, chunkmem=args.chunk_factor)
-        s.stack_all(keep_DP3_uvw=args.dp3_uvw, safe_mem=args.safe_memory, extra_cooldowns=args.extra_cooldowns)
+        s = Stack(args.msin, args.msout, tmp_folder=args.tmp, chunkmem=args.chunk_memory)
+        s.stack_all(keep_DP3_uvw=args.dp3_uvw, safe_mem=args.always_memmap, extra_cooldowns=args.extra_cooldowns)
         elapsed_time = time() - start_time
         print(f"Elapsed time for stacking: {elapsed_time} seconds")
 

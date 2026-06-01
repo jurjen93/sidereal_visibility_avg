@@ -36,10 +36,9 @@ class Stack:
         F.close()
 
         # Memory and chunk size
-        # Set number of cores
-        self.total_memory = psutil.virtual_memory().total / (1024 ** 3)  # in GB
+        self.total_memory = psutil.virtual_memory().total
         self.total_memory /= chunkmem
-        self.chunk_size = min(int(self.total_memory * (1024 ** 3) / np.dtype(np.float128).itemsize / 8 / self.freq_len), 30_000_000 // self.freq_len)
+        self.chunk_size = int(self.total_memory / np.dtype(np.float128).itemsize / self.freq_len // 2)
         print(f"\n---------------\nChunk size ==> {self.chunk_size}")
 
         self.tmp_folder = tmp_folder
